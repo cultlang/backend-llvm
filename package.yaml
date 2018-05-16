@@ -1,0 +1,116 @@
+id: Backendllvm
+namespace: Cultlang
+shortname: Llvm Backend for cultlang
+version: "0.1.0"
+repo: https://github.com/cultlang/bultinbase
+entry-name: cultllvm
+dependencies:
+  - Util@OffByOneStudios
+  - Types@OffByOneStudios
+  - Lisp@OffByOneStudios
+
+include-directories: []
+  
+vendor-dependencies:
+  x86_64-pc-windows-msvccoff:
+    - "LLVMX86Info"
+    - "LLVMX86Utils"
+    - "LLVMXRay"
+    - "LLVMAnalysis"
+    - "LLVMAsmParser"
+    - "LLVMAsmPrinter"
+    - "LLVMBinaryFormat"
+    - "LLVMBitReader"
+    - "LLVMBitWriter"
+    - "LLVMCodeGen"
+    - "LLVMCore"
+    - "LLVMCoroutines"
+    - "LLVMCoverage"
+    - "LLVMDebugInfoCodeView"
+    - "LLVMDebugInfoDWARF"
+    - "LLVMDebugInfoMSF"
+    - "LLVMDebugInfoPDB"
+    - "LLVMDemangle"
+    - "LLVMDlltoolDriver"
+    - "LLVMExecutionEngine"
+    - "LLVMGlobalISel"
+    - "LLVMInstCombine"
+    - "LLVMInstrumentation"
+    - "LLVMInterpreter"
+    - "LLVMipo"
+    - "LLVMIRReader"
+    - "LLVMLibDriver"
+    - "LLVMLineEditor"
+    - "LLVMLinker"
+    - "LLVMLTO"
+    - "LLVMMC"
+    - "LLVMMCDisassembler"
+    - "LLVMMCJIT"
+    - "LLVMMCParser"
+    - "LLVMMIRParser"
+    - "LLVMObjCARCOpts"
+    - "LLVMObject"
+    - "LLVMObjectYAML"
+    - "LLVMOption"
+    - "LLVMOrcJIT"
+    - "LLVMPasses"
+    - "LLVMProfileData"
+    - "LLVMRuntimeDyld"
+    - "LLVMScalarOpts"
+    - "LLVMSelectionDAG"
+    - "LLVMSupport"
+    - "LLVMSymbolize"
+    - "LLVMTableGen"
+    - "LLVMTarget"
+    - "LLVMTestingSupport"
+    - "LLVMTransformUtils"
+    - "LLVMVectorize"
+    - "LLVMX86AsmParser"
+    - "LLVMX86AsmPrinter"
+    - "LLVMX86CodeGen"
+    - "LLVMX86Desc"
+    - "LLVMX86Disassembler"
+  x86_64-apple-macosx-macho: []
+  x86_64-pc-linux-gnu: []
+
+platform-dependencies:
+  x86_64-pc-windows-msvccoff: []
+  x86_64-apple-macosx-macho: []
+  x86_64-pc-linux-gnu: []
+
+platform-compile-flags:
+  x86_64-pc-windows-msvccoff:
+    - "/std:c++latest"
+  x86_64-apple-macosx-macho: 
+    - "-std=c++1z"
+    - "-stdlib=libc++"
+    - "-Wc++11-extensions"
+  x86_64-pc-linux-gnu: 
+    - "-std=gnu++1z"
+    - "-pthread"
+    - "-fpermissive"
+
+platform-link-flags:
+  x86_64-pc-windows-msvccoff:
+    - "/ignore:4099"
+    
+platform-defines:
+  x86_64-pc-windows-msvccoff:
+    _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS: yes
+  x86_64-apple-macosx-macho: {}
+  x86_64-pc-linux-gnu: {}
+  
+artifacts:
+  library:
+    primary: yes
+    kind: dll craft-types
+    files:
+      - src/**/*.*
+  test:
+    kind: test
+    files:
+      - test/**/*.*
+  entry:
+    kind: exe
+    files:
+      - entry/**/*.*
