@@ -97,6 +97,7 @@ platform-link-flags:
 platform-defines:
   x86_64-pc-windows-msvccoff:
     _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS: yes
+    _SCL_SECURE_NO_WARNINGS: yes
   x86_64-apple-macosx-macho: {}
   x86_64-pc-linux-gnu: {}
   

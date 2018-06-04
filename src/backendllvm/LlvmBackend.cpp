@@ -1,8 +1,7 @@
 #include "backendllvm/common.h"
 
-/*
-#include "lisp/backend/llvm/llvm_internal.h"
-#include "lisp/backend/llvm/LlvmBackend.h"
+#include "llvm_internal.h"
+#include "LlvmBackend.h"
 
 using namespace craft;
 using namespace craft::types;
@@ -11,16 +10,18 @@ using namespace craft::lisp;
 using namespace llvm;
 using namespace llvm::orc;
 
-CRAFT_LISP_EXPORTED instance<> __trampoline_interpreter(LlvmSubroutine* subroutine, instance<>* arry, size_t count)
+CULTLANG_BACKENDLLVM_EXPORTED instance<> __trampoline_interpreter(LlvmSubroutine* subroutine, instance<>* arry, size_t count)
 {
-	auto sexpr = instance<Sexpr>::make();
-	sexpr->cells.reserve(count + 1);
-	sexpr->cells.push_back(instance<LlvmSubroutine>(subroutine));
-	std::copy(arry, arry + count, std::back_inserter(sexpr->cells));
+	GenericInvoke invoke(count);
+	std::copy(arry, arry + count, std::back_inserter(invoke.args));
 
+	/*
 	auto frame = Execution::getCurrent();
 	auto ns = frame->getNamespace();
 	return ns->get<BootstrapInterpreter>()->exec();
+	*/
+
+	return instance<>();
 }
 
 CRAFT_DEFINE(LlvmBackend)
@@ -30,13 +31,22 @@ CRAFT_DEFINE(LlvmBackend)
 	_.defaults();
 }
 
+std::string LlvmBackend::mangledName(instance<SBindable> bindable)
+{
+	auto binding = bindable->getBinding();
+	auto module = binding->getScope()->getSemantics()->getModule();
+
+	// TODO ensure more than 2 @ is an error for any real symbol
+	// TODO add type specialization here?
+	return fmt::format("{1}@@@{0}", module->uri(), binding->getSymbol()->getDisplay());
+}
+
 LlvmBackend::LlvmBackend(instance<Namespace> lisp)
 	: _tm(EngineBuilder().selectTarget()) // from current process
 	, _dl(_tm->createDataLayout())
 	, _objectLayer([]() { return std::make_shared<SectionMemoryManager>(); }) // lambda to make memory sections
 	, _compileLayer(_objectLayer, SimpleCompiler(*_tm))
-	, lisp(lisp)
-	, compiler(instance<LlvmCompiler>::make())
+	, _ns(lisp)
 {
 	llvm::sys::DynamicLibrary::LoadLibraryPermanently(nullptr); // load the current process
 
@@ -57,17 +67,42 @@ LlvmBackend::LlvmBackend(instance<Namespace> lisp)
 	});
 }
 
-void LlvmBackend::aquireBuiltins(instance<lisp::Module> builtins)
+void LlvmBackend::craft_setupInstance()
 {
+	_compiler = instance<LlvmCompiler>::make(craft_instance());
+}
 
+instance<LlvmCompiler> LlvmBackend::getCompiler() const
+{
+	return _compiler;
+}
+
+instance<Namespace> LlvmBackend::getNamespace() const
+{
+	return _ns;
 }
 
 void LlvmBackend::addModule(instance<LlvmModule> module)
 {
-	module->generate();
 
-	// Add the set to the JIT with the resolver we created above and a newly created SectionMemoryManager.
-	//module->handle = cantFail(_compileLayer.addModule(std::move(module->ir), _resolver));
+}
+
+void LlvmBackend::addJit(instance<LlvmSubroutine> subroutine)
+{
+	subroutine->generate();
+}
+void LlvmBackend::removeJit(instance<LlvmSubroutine> subroutine)
+{
+	cantFail(_compileLayer.removeModule(subroutine->_jit_handle_generic));
+}
+
+instance<> LlvmBackend::require(instance<SCultSemanticNode> node)
+{
+	auto module = SScope::findScope(node)->getSemantics()->getModule();
+	auto llvm = module->require<LlvmModule>();
+
+	llvm->generate();
+	return llvm->require(node);
 }
 
 JITSymbol LlvmBackend::findSymbol(std::string const& name)
@@ -83,11 +118,6 @@ JITTargetAddress LlvmBackend::getSymbolAddress(std::string const& name)
 	return cantFail(findSymbol(name).getAddress());
 }
 
-void LlvmBackend::removeModule(ModuleHandle H)
-{
-	cantFail(_compileLayer.removeModule(H));
-}
-
 LlvmBackendProvider::LlvmBackendProvider()
 {
 	llvm::InitializeNativeTarget();
@@ -100,6 +130,17 @@ instance<> LlvmBackendProvider::init(instance<Namespace> ns) const
 	return instance<LlvmBackend>::make(ns);
 }
 
+instance<> LlvmBackendProvider::makeCompilerOptions() const
+{
+	return instance<>();
+}
+
+void LlvmBackendProvider::compile(instance<> backend, instance<> options, std::string const& path, instance<lisp::Module> module) const
+{
+
+}
+
+/*
 instance<> LlvmBackendProvider::addModule(instance<> backend_ns, instance<lisp::Module> lisp_module) const
 {
 	instance<LlvmBackend> ns = backend_ns;
