@@ -3,6 +3,8 @@
 #include "llvm_internal.h"
 #include "LlvmSubroutine.h"
 
+#include "llvm/Transforms/Utils/Cloning.h"
+
 using namespace craft;
 using namespace craft::types;
 using namespace craft::lisp;
@@ -20,6 +22,8 @@ LlvmSubroutine::LlvmSubroutine(instance<LlvmModule> module, instance<SCultSemant
 	_module = module;
 	_ast = ast;
 
+	_jitted = false;
+
 	if (!_ast.isType<Function>())
 		throw stdext::exception("LlvmSubroutine only supports Functions (`{0}` is not one).", _ast);
 }
@@ -34,7 +38,7 @@ LlvmBackend::JitModule LlvmSubroutine::specialize(std::vector<TypeId>* types)
 	if (types != nullptr)
 		throw stdext::exception("Specialization not supported yet.");
 
-	if (*_jit_handle_generic)
+	if (_jitted)
 		return _jit_handle_generic;
 
 	auto backend = _module->getBackend();
@@ -43,9 +47,15 @@ LlvmBackend::JitModule LlvmSubroutine::specialize(std::vector<TypeId>* types)
 	auto name = LlvmBackend::mangledName(function);
 	auto type = backend->getCompiler()->getLlvmType(function->subroutine_signature());
 
+	auto proto_func = _module->getIr()->getFunction(name);
+
 	auto ir = std::make_unique<llvm::Module>(name, backend->getCompiler()->context);
 	ir->setDataLayout(backend->_dl);
 	auto func = llvm::Function::Create(type, llvm::Function::ExternalLinkage, name, ir.get());
+
+	llvm::ValueToValueMapTy vvmap;
+	llvm::SmallVector<llvm::ReturnInst*, 0> returns;
+	llvm::CloneFunctionInto(func, proto_func, vvmap, false, returns);
 
 	/*
 	BasicBlock* entry = BasicBlock::Create(backend->compiler->context, "entry", func);
@@ -82,8 +92,19 @@ LlvmBackend::JitModule LlvmSubroutine::specialize(std::vector<TypeId>* types)
 		backend->getNamespace()->getEnvironment()->log()->info(verify_str);
 
 	_jit_handle_generic = cantFail(backend->_compileLayer.addModule(std::move(ir), backend->_resolver));
+	_jitted = true;
 
 	return _jit_handle_generic;
+}
+
+instance<> LlvmSubroutine::invoke(GenericInvoke const& invk)
+{
+	auto function = _ast.asFeature<Function>();
+	auto name = LlvmBackend::mangledName(function);
+
+	auto res = cantFail(specialize()->get()->getSymbol(name, false).getAddress());
+
+	return types::invoke(function->subroutine_signature(), types::Function{ res }, invk);
 }
 
 std::string LlvmSubroutine::stringifyPrototypeIr()

@@ -17,7 +17,8 @@ namespace lisp
 		// TODO this may be responsible for many functions / multimethods
 		instance<SCultSemanticNode> _ast;
 
-		// TODO ad specialization code
+		// TODO add specialization code
+		bool _jitted;
 		LlvmBackend::JitModule _jit_handle_generic;
 		//std::map<types::ExpressionStore, LlvmBackend::JitModule> _jit_handle_specialized;
 
@@ -30,6 +31,8 @@ namespace lisp
 		// TODO take type signature:
 		CULTLANG_BACKENDLLVM_EXPORTED void generate();
 		CULTLANG_BACKENDLLVM_EXPORTED LlvmBackend::JitModule specialize(std::vector<types::TypeId>* = nullptr);
+
+		CULTLANG_BACKENDLLVM_EXPORTED instance<> invoke(types::GenericInvoke const&);
 
 		CULTLANG_BACKENDLLVM_EXPORTED std::string stringifyPrototypeIr();
 	};

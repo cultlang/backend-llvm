@@ -37,6 +37,23 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 		else return instance<std::string>();
 	});
 
+	sem->builtin_implementMultiMethod("llvm-call",
+		[](instance<SCultSemanticNode> node, VarArgs<instance<>> args)
+	{
+		auto res = Execution::getCurrent()->getNamespace()->get<LlvmBackend>()->require(node);
+
+		if (res.isType<LlvmSubroutine>())
+		{
+			auto sub = res.asType<LlvmSubroutine>();
+
+			GenericInvoke invoke(args.args.size());
+			std::copy(args.args.begin(), args.args.end(), std::back_inserter(invoke.args));
+
+			sub->invoke(invoke);
+		}
+		else throw stdext::exception("`{0}` is not a callable object.", node);
+	});
+
 
 	//
 	// LLVM - Compiler
@@ -58,7 +75,11 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 
 		compiler->compile(ast->bodyAst());
 
-		compiler->state->irBuilder->CreateRet(compiler->state->lastReturnedValue);
+		/*auto castRes = compiler->state->irBuilder->CreateCast(
+			llvm::CastInst::CastOps::BitCast,
+			compiler->state->lastReturnedValue,
+			compiler->state->codeFunction->getReturnType());*/
+		compiler->state->irBuilder->CreateRet(compiler->state->lastReturnedValue /*castRes*/);
 	});
 	sem->builtin_implementMultiMethod("compile",
 		[](instance<LlvmCompiler> compiler, instance<Block> ast)
