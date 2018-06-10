@@ -42,12 +42,20 @@ std::string LlvmBackend::mangledName(instance<SBindable> bindable)
 }
 
 LlvmBackend::LlvmBackend(instance<Namespace> lisp)
-	: _tm(EngineBuilder().selectTarget()) // from current process
+	: context()
+	, _tm(EngineBuilder().selectTarget()) // from current process
 	, _dl(_tm->createDataLayout())
-	, _objectLayer([]() { return std::make_shared<SectionMemoryManager>(); }) // lambda to make memory sections
+	, _objectLayer([]() {
+		return std::make_shared<SectionMemoryManager>();
+	}) // lambda to make memory sections
 	, _compileLayer(_objectLayer, SimpleCompiler(*_tm))
 	, _ns(lisp)
 {
+	lisp->getEnvironment()->log()->info("LLVM Target: {0}", (std::string)_tm->getTargetTriple().str());
+	lisp->getEnvironment()->log()->info("LLVM Target Features: {0}", (std::string)_tm->getTargetFeatureString());
+
+	_objectLayer.setProcessAllSections(true);
+
 	llvm::sys::DynamicLibrary::LoadLibraryPermanently(nullptr); // load the current process
 
 	// Build our symbol resolver:
@@ -123,6 +131,10 @@ LlvmBackendProvider::LlvmBackendProvider()
 	llvm::InitializeNativeTarget();
 	llvm::InitializeNativeTargetAsmPrinter();
 	llvm::InitializeNativeTargetAsmParser();
+
+	llvm::InitializeAllTargets();
+	llvm::InitializeAllTargetMCs();
+	llvm::InitializeAllAsmPrinters();
 }
 
 instance<> LlvmBackendProvider::init(instance<Namespace> ns) const

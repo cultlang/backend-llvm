@@ -75,11 +75,10 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 
 		compiler->compile(ast->bodyAst());
 
-		/*auto castRes = compiler->state->irBuilder->CreateCast(
-			llvm::CastInst::CastOps::BitCast,
-			compiler->state->lastReturnedValue,
-			compiler->state->codeFunction->getReturnType());*/
-		compiler->state->irBuilder->CreateRet(compiler->state->lastReturnedValue /*castRes*/);
+		compiler->state->irBuilder->CreateRet(
+			compiler->build_instanceCast(
+				compiler->state->lastReturnedValue,
+				types::None));
 	});
 	sem->builtin_implementMultiMethod("compile",
 		[](instance<LlvmCompiler> compiler, instance<Block> ast)

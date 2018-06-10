@@ -42,7 +42,7 @@ void LlvmModule::generate()
 	if (_ir) return;
 
 	auto s = _module->uri();
-	_ir = std::make_unique<llvm::Module>(StringRef(s), _backend->getCompiler()->context);
+	_ir = std::make_unique<llvm::Module>(StringRef(s), _backend->context);
 	_ir->setDataLayout(_backend->_dl);
 
 	auto semantics = _module->require<CultSemantics>();

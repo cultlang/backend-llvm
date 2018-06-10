@@ -15,7 +15,7 @@ namespace lisp
 		instance<LlvmBackend> _backend;
 
 		llvm::Type* type_anyPtr;
-		llvm::Type* type_instanceMetaHeader;
+		llvm::StructType* type_instanceMetaHeader;
 		llvm::Type* type_anyInstance;
 
 		struct _TypeCacheEntry
@@ -27,8 +27,6 @@ namespace lisp
 		std::map<types::TypeId, _TypeCacheEntry> _typeCache;
 
 	public:
-		llvm::LLVMContext context;
-
 		struct CompilerState
 		{
 			instance<lisp::Module> currentModule;
@@ -49,6 +47,8 @@ namespace lisp
 	public:
 		CULTLANG_BACKENDLLVM_EXPORTED LlvmCompiler(instance<LlvmBackend> backend);
 
+		CULTLANG_BACKENDLLVM_EXPORTED instance<LlvmBackend> getBackend();
+
 	public:
 		CULTLANG_BACKENDLLVM_EXPORTED void compile(instance<lisp::SCultSemanticNode> node);
 		CULTLANG_BACKENDLLVM_EXPORTED void compile_setModule(instance<lisp::Module> module);
@@ -61,6 +61,7 @@ namespace lisp
 		CULTLANG_BACKENDLLVM_EXPORTED llvm::FunctionType* getLlvmType(types::ExpressionStore signature);
 
 		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* build_instanceAsConstant(instance<> inst);
+		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* build_instanceCast(llvm::Value*, types::TypeId type);
 
 	public:
 

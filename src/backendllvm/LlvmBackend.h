@@ -27,7 +27,7 @@ namespace lisp
 	{
 		CULTLANG_BACKENDLLVM_EXPORTED CRAFT_OBJECT_DECLARE(craft::lisp::LlvmBackend);
 	public:
-		typedef void(*f_specialFormHandler)();
+		llvm::LLVMContext context;
 
 	private:
 		friend class LlvmBackendProvider;

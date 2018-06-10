@@ -49,13 +49,23 @@ LlvmBackend::JitModule LlvmSubroutine::specialize(std::vector<TypeId>* types)
 
 	auto proto_func = _module->getIr()->getFunction(name);
 
-	auto ir = std::make_unique<llvm::Module>(name, backend->getCompiler()->context);
+	auto ir = std::make_shared<llvm::Module>(_module->getModule()->uri(), backend->context);
 	ir->setDataLayout(backend->_dl);
+	ir->setTargetTriple(llvm::sys::getDefaultTargetTriple());
+
 	auto func = llvm::Function::Create(type, llvm::Function::ExternalLinkage, name, ir.get());
 
 	llvm::ValueToValueMapTy vvmap;
-	llvm::SmallVector<llvm::ReturnInst*, 0> returns;
-	llvm::CloneFunctionInto(func, proto_func, vvmap, false, returns);
+	auto funcArgIt = func->arg_begin();
+	for (auto const& it : func->args())
+		if (vvmap.count(&it) == 0)
+		{
+			funcArgIt->setName(it.getName());
+			vvmap[&it] = &*funcArgIt++;
+		}
+	llvm::SmallVector<llvm::ReturnInst*, 8> returns;
+	llvm::CloneFunctionInto(func, proto_func, vvmap, true, returns);
+	func->setCallingConv(llvm::CallingConv::Win64);
 
 	/*
 	BasicBlock* entry = BasicBlock::Create(backend->compiler->context, "entry", func);
@@ -87,11 +97,14 @@ LlvmBackend::JitModule LlvmSubroutine::specialize(std::vector<TypeId>* types)
 
 	std::string verify_str;
 	llvm::raw_string_ostream verify_strm(verify_str);
-	verifyFunction(*func, &verify_strm);
+	verifyModule(*ir.get(), &verify_strm);
+	verify_strm.flush();
 	if (!verify_str.empty())
 		backend->getNamespace()->getEnvironment()->log()->info(verify_str);
 
-	_jit_handle_generic = cantFail(backend->_compileLayer.addModule(std::move(ir), backend->_resolver));
+	ir->dump();
+
+	_jit_handle_generic = cantFail(backend->_compileLayer.addModule(ir, backend->_resolver));
 	_jitted = true;
 
 	return _jit_handle_generic;
@@ -102,9 +115,13 @@ instance<> LlvmSubroutine::invoke(GenericInvoke const& invk)
 	auto function = _ast.asFeature<Function>();
 	auto name = LlvmBackend::mangledName(function);
 
-	auto res = cantFail(specialize()->get()->getSymbol(name, false).getAddress());
+	specialize();
 
-	return types::invoke(function->subroutine_signature(), types::Function{ res }, invk);
+	auto res = cantFail(_jit_handle_generic->get()->getSymbol(name, false).getAddress());
+
+	if (res == 0)
+		return instance<>();
+	return types::invoke(function->subroutine_signature(), types::Function(res), invk);
 }
 
 std::string LlvmSubroutine::stringifyPrototypeIr()

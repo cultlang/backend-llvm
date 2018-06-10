@@ -19,11 +19,17 @@ LlvmCompiler::LlvmCompiler(instance<LlvmBackend> backend)
 {
 	_backend = backend;
 
-	type_anyPtr = llvm::Type::getInt8PtrTy(context);
-	type_instanceMetaHeader = llvm::StructType::create(context, "!instancemetaheader");
-	type_anyInstance = llvm::StructType::get(context, { llvm::PointerType::get(type_instanceMetaHeader, 0), type_anyPtr });
+	type_anyPtr = llvm::Type::getInt8PtrTy(_backend->context);
+	type_instanceMetaHeader = llvm::StructType::create(_backend->context, "!instancemetaheader");
+	type_instanceMetaHeader->setBody({ type_anyPtr, type_anyPtr, type_anyPtr, type_anyPtr });
+	type_anyInstance = llvm::StructType::get(_backend->context, { llvm::PointerType::get(type_instanceMetaHeader, 0), type_anyPtr });
 
 	state = new CompilerState();
+}
+
+instance<LlvmBackend> LlvmCompiler::getBackend()
+{
+	return _backend;
 }
 
 void LlvmCompiler::compile(instance<lisp::SCultSemanticNode> node)
@@ -54,9 +60,9 @@ void LlvmCompiler::compile_setFunction(instance<lisp::Function> func)
 		state->codeModule);
 
 	if (state->irBuilder != nullptr) delete state->irBuilder;
-	state->irBuilder = new llvm::IRBuilder<>(context);
+	state->irBuilder = new llvm::IRBuilder<>(_backend->context);
 
-	auto block = llvm::BasicBlock::Create(context, name, state->codeFunction);
+	auto block = llvm::BasicBlock::Create(_backend->context, name, state->codeFunction);
 	state->irBuilder->SetInsertPoint(block);
 }
 
@@ -67,8 +73,8 @@ LlvmCompiler::_TypeCacheEntry LlvmCompiler::_getTypeCache(types::TypeId type)
 		return mclb->second; // key already exists
 
 	_TypeCacheEntry entry;
-	entry.opaque_struct = StructType::create(context, type.toString(false));
-	entry.instance = llvm::StructType::get(context, { llvm::PointerType::get(type_instanceMetaHeader, 0), llvm::PointerType::get(entry.opaque_struct, 0) });
+	entry.opaque_struct = StructType::create(_backend->context, type.toString(false));
+	entry.instance = llvm::StructType::get(_backend->context, { llvm::PointerType::get(type_instanceMetaHeader, 0), llvm::PointerType::get(entry.opaque_struct, 0) });
 
 	_typeCache.insert(mclb, { type, entry });
 	return entry;
@@ -112,15 +118,33 @@ llvm::FunctionType* LlvmCompiler::getLlvmType(types::ExpressionStore signature)
 	return llvm::FunctionType::get(return_, args, false);
 }
 
-inline llvm::Value* LlvmCompiler::build_instanceAsConstant(instance<> inst)
+llvm::Value* LlvmCompiler::build_instanceAsConstant(instance<> inst)
 {
 	auto entry = _getTypeCache(inst.typeId());
 
-	return llvm::ConstantStruct::get(entry.instance,
+	return llvm::ConstantStruct::getAnon(
 		{
-			llvm::ConstantExpr::getIntToPtr(llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), (uint64_t)inst.asInternalPointer()), llvm::PointerType::get(type_instanceMetaHeader, 0)),
-			llvm::ConstantExpr::getIntToPtr(llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), (uint64_t)inst.get()), llvm::PointerType::get(entry.opaque_struct, 0))
+			llvm::ConstantExpr::getIntToPtr(llvm::ConstantInt::get(llvm::Type::getInt64Ty(_backend->context), (uint64_t)inst.asInternalPointer()), llvm::PointerType::get(type_instanceMetaHeader, 0)),
+			llvm::ConstantExpr::getIntToPtr(llvm::ConstantInt::get(llvm::Type::getInt64Ty(_backend->context), (uint64_t)inst.get()), llvm::PointerType::get(entry.opaque_struct, 0))
 		});
+}
+
+llvm::Value* LlvmCompiler::build_instanceCast(llvm::Value* value, TypeId type)
+{
+	_TypeCacheEntry* entry = nullptr;
+	if (type != types::None) entry = &_getTypeCache(type);
+
+	auto const targetPtrType = (entry == nullptr) ? type_anyPtr : llvm::PointerType::get(entry->opaque_struct, 0);
+
+	if (auto *vconst = dyn_cast<llvm::Constant>(value))
+	{
+		return llvm::ConstantStruct::getAnon(
+			{
+				llvm::ConstantExpr::getExtractValue(vconst, { 0 }),
+				llvm::ConstantExpr::getBitCast(llvm::ConstantExpr::getExtractValue(vconst, { 1 }), targetPtrType)
+			});
+	}
+	else throw stdext::exception("Runtime casting not supported yet.");
 }
 
 void LlvmCompiler::builtin_validateSpecialForms(instance<lisp::Module> module)
