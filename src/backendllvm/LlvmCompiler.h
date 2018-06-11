@@ -5,13 +5,36 @@
 namespace craft {
 namespace lisp
 {
+	/******************************************************************************
+	** SLlvmAbi
+	******************************************************************************/
+
+	class SLlvmAbi
+		: public craft::types::Aspect
+	{
+		CULTLANG_BACKENDLLVM_EXPORTED CRAFT_LEGACY_FEATURE_DECLARE(craft::lisp::SLlvmAbi, "llvm.abi", types::FactoryAspectManager);
+
+	public:
+		CULTLANG_BACKENDLLVM_EXPORTED virtual std::string abiName() = 0;
+
+		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPre() = 0;
+		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPost() = 0;
+
+		CULTLANG_BACKENDLLVM_EXPORTED virtual void genReturn(llvm::Value*) = 0;
+	};
+
+	/******************************************************************************
+	** LlvmCompiler
+	******************************************************************************/
+
 	class LlvmCompiler
 		: public virtual craft::types::Object
 	{
 		CULTLANG_BACKENDLLVM_EXPORTED CRAFT_OBJECT_DECLARE(craft::lisp::LlvmCompiler);
 
 	protected:
-		friend LlvmBackend;
+		friend class LlvmBackend;
+		friend class LlvmCompileState;
 		instance<LlvmBackend> _backend;
 
 		llvm::Type* type_anyPtr;
@@ -26,18 +49,7 @@ namespace lisp
 
 		std::map<types::TypeId, _TypeCacheEntry> _typeCache;
 
-	public:
-		struct CompilerState
-		{
-			instance<lisp::Module> currentModule;
-			llvm::Module* codeModule;
-			llvm::Function* codeFunction;
-
-			llvm::IRBuilder<>* irBuilder;
-			llvm::Value* lastReturnedValue;
-		};
-
-		CompilerState* state;
+		instance<LlvmCompileState> _state;
 
 	private:
 		instance<MultiMethod> _fn_system_compile;
@@ -46,13 +58,12 @@ namespace lisp
 
 	public:
 		CULTLANG_BACKENDLLVM_EXPORTED LlvmCompiler(instance<LlvmBackend> backend);
+		CULTLANG_BACKENDLLVM_EXPORTED void craft_setupInstance();
 
 		CULTLANG_BACKENDLLVM_EXPORTED instance<LlvmBackend> getBackend();
 
 	public:
 		CULTLANG_BACKENDLLVM_EXPORTED void compile(instance<lisp::SCultSemanticNode> node);
-		CULTLANG_BACKENDLLVM_EXPORTED void compile_setModule(instance<lisp::Module> module);
-		CULTLANG_BACKENDLLVM_EXPORTED void compile_setFunction(instance<lisp::Function> func);
 
 		CULTLANG_BACKENDLLVM_EXPORTED llvm::Type* getLlvmInstanceType(types::TypeId type);
 		CULTLANG_BACKENDLLVM_EXPORTED llvm::Type* getLlvmValueType(types::TypeId type);
@@ -60,13 +71,110 @@ namespace lisp
 		CULTLANG_BACKENDLLVM_EXPORTED llvm::Type* getLlvmType(types::IExpression* node);
 		CULTLANG_BACKENDLLVM_EXPORTED llvm::FunctionType* getLlvmType(types::ExpressionStore signature);
 
-		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* build_instanceAsConstant(instance<> inst);
-		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* build_instanceCast(llvm::Value*, types::TypeId type);
-
 	public:
 
 		// Ensures the module has everything the interpreter needs
 		CULTLANG_BACKENDLLVM_EXPORTED void builtin_validateSpecialForms(instance<lisp::Module> module);
 	};
 
+	/******************************************************************************
+	** LlvmCompileState
+	******************************************************************************/
+
+	class LlvmCompileState
+		: public virtual craft::types::Object
+	{
+		CULTLANG_BACKENDLLVM_EXPORTED CRAFT_OBJECT_DECLARE(craft::lisp::LlvmCompileState);
+	private:
+		instance<LlvmCompiler> _compiler;
+		instance<SLlvmAbi> _abi;
+
+	public:
+		llvm::LLVMContext* context;
+
+		instance<lisp::Module> currentModule;
+		llvm::Module* codeModule;
+		instance<lisp::Function> currentFunction;
+		llvm::Function* codeFunction;
+
+		llvm::IRBuilder<>* irBuilder;
+		llvm::Value* lastReturnedValue;
+
+	public:
+		CULTLANG_BACKENDLLVM_EXPORTED LlvmCompileState(instance<LlvmCompiler> compiler);
+		CULTLANG_BACKENDLLVM_EXPORTED void craft_setupInstance();
+
+		CULTLANG_BACKENDLLVM_EXPORTED instance<LlvmCompiler> getCompiler() const;
+
+		CULTLANG_BACKENDLLVM_EXPORTED void setAbi(instance<>);
+		CULTLANG_BACKENDLLVM_EXPORTED instance<> getAbi();
+
+	public:
+		CULTLANG_BACKENDLLVM_EXPORTED void compile(instance<lisp::SCultSemanticNode> node);
+
+		CULTLANG_BACKENDLLVM_EXPORTED void setModule(instance<lisp::Module> module);
+		CULTLANG_BACKENDLLVM_EXPORTED void setFunction(instance<lisp::Function> func);
+
+		// compile helpers
+	public:
+		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* genInstanceAsConstant(instance<> inst);
+		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* genInstanceCast(llvm::Value*, types::TypeId type);
+		CULTLANG_BACKENDLLVM_EXPORTED void genReturn(llvm::Value*);
+
+		// Forwarding helpers
+	public:
+		inline llvm::Type* getLlvmInstanceType(types::TypeId type) const { return getCompiler()->getLlvmInstanceType(type); }
+		inline llvm::Type* getLlvmValueType(types::TypeId type) const { return getCompiler()->getLlvmValueType(type); }
+		inline llvm::Type* getLlvmValuePointerType(types::TypeId type) const { return getCompiler()->getLlvmValuePointerType(type); }
+		inline llvm::Type* getLlvmType(types::IExpression* node) const { return getCompiler()->getLlvmType(node); }
+		inline llvm::FunctionType* getLlvmType(types::ExpressionStore signature) const { return getCompiler()->getLlvmType(signature); }
+
+	};
+
+	/******************************************************************************
+	** LlvmAbiBase
+	******************************************************************************/
+
+	// Base ABI / pure llvm abi
+	class LlvmAbiBase
+		: public virtual craft::types::Object
+		, public craft::types::Implements<SLlvmAbi>
+	{
+		CULTLANG_BACKENDLLVM_EXPORTED CRAFT_OBJECT_DECLARE(craft::lisp::LlvmAbiBase);
+
+	protected:
+		instance<LlvmCompileState> _c;
+
+	public:
+		CULTLANG_BACKENDLLVM_EXPORTED LlvmAbiBase(instance<LlvmCompileState> compileState);
+
+	public:
+		CULTLANG_BACKENDLLVM_EXPORTED virtual std::string abiName() override;
+
+		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPre() override;
+		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPost() override;
+
+		CULTLANG_BACKENDLLVM_EXPORTED virtual void genReturn(llvm::Value*) override;
+	};
+
+	/******************************************************************************
+	** LlvmAbiWindows
+	******************************************************************************/
+
+	// Windows ABI
+	class LlvmAbiWindows
+		: public LlvmAbiBase
+	{
+		CULTLANG_BACKENDLLVM_EXPORTED CRAFT_OBJECT_DECLARE(craft::lisp::LlvmAbiWindows);
+
+	public:
+		CULTLANG_BACKENDLLVM_EXPORTED LlvmAbiWindows(instance<LlvmCompileState> compileState);
+
+	public:
+		CULTLANG_BACKENDLLVM_EXPORTED virtual std::string abiName() override;
+
+		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPre() override;
+
+		CULTLANG_BACKENDLLVM_EXPORTED virtual void genReturn(llvm::Value*) override;
+	};
 }}

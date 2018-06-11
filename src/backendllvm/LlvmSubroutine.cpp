@@ -44,10 +44,11 @@ LlvmBackend::JitModule LlvmSubroutine::specialize(std::vector<TypeId>* types)
 	auto backend = _module->getBackend();
 
 	auto function = _ast.asFeature<Function>();
-	auto name = LlvmBackend::mangledName(function);
+	auto name = LlvmBackend::mangledName(function, "windows");
 	auto type = backend->getCompiler()->getLlvmType(function->subroutine_signature());
 
 	auto proto_func = _module->getIr()->getFunction(name);
+	_module->getIr()->dump();
 
 	auto ir = std::make_shared<llvm::Module>(_module->getModule()->uri(), backend->context);
 	ir->setDataLayout(backend->_dl);
@@ -55,9 +56,10 @@ LlvmBackend::JitModule LlvmSubroutine::specialize(std::vector<TypeId>* types)
 
 	auto func = llvm::Function::Create(type, llvm::Function::ExternalLinkage, name, ir.get());
 
+	// TODO: specialize for ABI type??
 	llvm::ValueToValueMapTy vvmap;
 	auto funcArgIt = func->arg_begin();
-	for (auto const& it : func->args())
+	for (auto const& it : proto_func->args())
 		if (vvmap.count(&it) == 0)
 		{
 			funcArgIt->setName(it.getName());
@@ -113,7 +115,7 @@ LlvmBackend::JitModule LlvmSubroutine::specialize(std::vector<TypeId>* types)
 instance<> LlvmSubroutine::invoke(GenericInvoke const& invk)
 {
 	auto function = _ast.asFeature<Function>();
-	auto name = LlvmBackend::mangledName(function);
+	auto name = LlvmBackend::mangledName(function, "windows");
 
 	specialize();
 

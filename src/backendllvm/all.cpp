@@ -49,7 +49,7 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 			GenericInvoke invoke(args.args.size());
 			std::copy(args.args.begin(), args.args.end(), std::back_inserter(invoke.args));
 
-			sub->invoke(invoke);
+			return sub->invoke(invoke);
 		}
 		else throw stdext::exception("`{0}` is not a callable object.", node);
 	});
@@ -59,36 +59,48 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 	// LLVM - Compiler
 	//
 	sem->builtin_implementMultiMethod("compile",
-		[](instance<LlvmCompiler> compiler, instance<Constant> ast)
+		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<Constant> ast)
 	{
 		auto value = ast->getValue();
 
-		compiler->state->lastReturnedValue = compiler->build_instanceAsConstant(value);
+		c->lastReturnedValue = c->genInstanceAsConstant(value);
 	});
 	sem->builtin_implementMultiMethod("compile",
-		[](instance<LlvmCompiler> compiler, instance<lisp::Function> ast)
+		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<lisp::Function> ast)
 	{
-		compiler->compile_setModule(ast->getSemantics()->getModule());
-		compiler->compile_setFunction(ast);
+		c->setModule(ast->getSemantics()->getModule());
+		c->setFunction(ast);
 
 		// TODO read through args, set names
 
-		compiler->compile(ast->bodyAst());
+		c->compile(ast->bodyAst());
 
-		compiler->state->irBuilder->CreateRet(
-			compiler->build_instanceCast(
-				compiler->state->lastReturnedValue,
-				types::None));
+		c->genReturn(c->genInstanceCast(c->lastReturnedValue, types::None));
 	});
 	sem->builtin_implementMultiMethod("compile",
-		[](instance<LlvmCompiler> compiler, instance<Block> ast)
+		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<Block> ast)
 	{
 		auto count = ast->statementCount();
 		for (auto i = 0; i < count; i++)
 		{
-			compiler->compile(ast->statementAst(i));
+			c->compile(ast->statementAst(i));
 		}
 		// The last returned value is implictly set here
+	});
+	sem->builtin_implementMultiMethod("compile",
+		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<CallSite> ast)
+	{
+		auto count = ast->argCount();
+
+		std::vector<llvm::Value*> args;
+		args.reserve(count);
+
+		for (auto i = 0; i < count; ++i)
+		{
+			c->compile(ast->argAst(i));
+			args.push_back(c->lastReturnedValue);
+		}
+
 	});
 
 	/*

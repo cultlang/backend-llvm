@@ -58,7 +58,7 @@ namespace lisp
 	public:
 		using JitModule = decltype(_compileLayer)::ModuleHandleT;
 
-		CULTLANG_BACKENDLLVM_EXPORTED static std::string mangledName(instance<SBindable>);
+		CULTLANG_BACKENDLLVM_EXPORTED static std::string mangledName(instance<SBindable>, std::string const& postFix = "");
 
 	public:
 

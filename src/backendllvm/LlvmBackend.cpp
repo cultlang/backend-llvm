@@ -31,14 +31,17 @@ CRAFT_DEFINE(LlvmBackend)
 	_.defaults();
 }
 
-std::string LlvmBackend::mangledName(instance<SBindable> bindable)
+std::string LlvmBackend::mangledName(instance<SBindable> bindable, std::string const& postFix)
 {
 	auto binding = bindable->getBinding();
 	auto module = binding->getScope()->getSemantics()->getModule();
 
 	// TODO ensure more than 2 @ is an error for any real symbol
 	// TODO add type specialization here?
-	return fmt::format("{1}@@@{0}", module->uri(), binding->getSymbol()->getDisplay());
+	if (postFix.empty())
+		return fmt::format("{1}@@@{0}", module->uri(), binding->getSymbol()->getDisplay());
+	else
+		return fmt::format("{1}@@@{0}:::{2}", module->uri(), binding->getSymbol()->getDisplay(), postFix);
 }
 
 LlvmBackend::LlvmBackend(instance<Namespace> lisp)
@@ -131,10 +134,6 @@ LlvmBackendProvider::LlvmBackendProvider()
 	llvm::InitializeNativeTarget();
 	llvm::InitializeNativeTargetAsmPrinter();
 	llvm::InitializeNativeTargetAsmParser();
-
-	llvm::InitializeAllTargets();
-	llvm::InitializeAllTargetMCs();
-	llvm::InitializeAllAsmPrinters();
 }
 
 instance<> LlvmBackendProvider::init(instance<Namespace> ns) const
