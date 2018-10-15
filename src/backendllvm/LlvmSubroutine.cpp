@@ -48,7 +48,7 @@ LlvmBackend::JitModule LlvmSubroutine::specialize(std::vector<TypeId>* types)
 	auto type = backend->getCompiler()->getLlvmType(function->subroutine_signature());
 
 	auto proto_func = _module->getIr()->getFunction(name);
-	_module->getIr()->dump();
+	//_module->getIr()->dump();
 
 	auto ir = std::make_shared<llvm::Module>(_module->getModule()->uri(), backend->context);
 	ir->setDataLayout(backend->_dl);
@@ -104,7 +104,7 @@ LlvmBackend::JitModule LlvmSubroutine::specialize(std::vector<TypeId>* types)
 	if (!verify_str.empty())
 		backend->getNamespace()->getEnvironment()->log()->info(verify_str);
 
-	ir->dump();
+	//ir->dump();
 
 	_jit_handle_generic = cantFail(backend->_compileLayer.addModule(ir, backend->_resolver));
 	_jitted = true;

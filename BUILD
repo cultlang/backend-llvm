@@ -1,0 +1,78 @@
+load("//build_tools:macros.bzl", "header_generator", "dll_generator", "entrypoint_generator")
+
+header_generator(  
+  deps = [
+    "//util", 
+    "//types:headers", 
+    "//lisp:headers", 
+    "@llvm//:headers"
+  ]
+)
+
+dll_generator(
+  packages = [
+    "types",
+    "lisp",
+  ],
+  deps = [
+    "@llvm//:LLVMAnalysis",
+    "@llvm//:LLVMAsmParser",
+    "@llvm//:LLVMAsmPrinter",
+    "@llvm//:LLVMBinaryFormat",
+    "@llvm//:LLVMBitReader",
+    "@llvm//:LLVMBitWriter",
+    "@llvm//:LLVMCodeGen",
+    "@llvm//:LLVMCore",
+    "@llvm//:LLVMCoroutines",
+    "@llvm//:LLVMCoverage",
+    "@llvm//:LLVMDebugInfoCodeView",
+    "@llvm//:LLVMDebugInfoDWARF",
+    "@llvm//:LLVMDebugInfoMSF",
+    "@llvm//:LLVMDebugInfoPDB",
+    "@llvm//:LLVMDemangle",
+    "@llvm//:LLVMDlltoolDriver",
+    "@llvm//:LLVMExecutionEngine",
+    "@llvm//:LLVMGlobalISel",
+    "@llvm//:LLVMInstCombine",
+    "@llvm//:LLVMInstrumentation",
+    "@llvm//:LLVMInterpreter",
+    "@llvm//:LLVMipo",
+    "@llvm//:LLVMIRReader",
+    "@llvm//:LLVMLibDriver",
+    "@llvm//:LLVMLineEditor",
+    "@llvm//:LLVMLinker",
+    "@llvm//:LLVMLTO",
+    "@llvm//:LLVMMC",
+    "@llvm//:LLVMMCDisassembler",
+    "@llvm//:LLVMMCJIT",
+    "@llvm//:LLVMMCParser",
+    "@llvm//:LLVMMIRParser",
+    "@llvm//:LLVMObjCARCOpts",
+    "@llvm//:LLVMObject",
+    "@llvm//:LLVMObjectYAML",
+    "@llvm//:LLVMOption",
+    "@llvm//:LLVMOrcJIT",
+    "@llvm//:LLVMPasses",
+    "@llvm//:LLVMProfileData",
+    "@llvm//:LLVMRuntimeDyld",
+    "@llvm//:LLVMScalarOpts",
+    "@llvm//:LLVMSelectionDAG",
+    "@llvm//:LLVMSupport",
+    "@llvm//:LLVMSymbolize",
+    "@llvm//:LLVMTableGen",
+    "@llvm//:LLVMTarget",
+    "@llvm//:LLVMTestingSupport",
+    "@llvm//:LLVMTransformUtils",
+    "@llvm//:LLVMVectorize",
+    "@llvm//:LLVMX86AsmParser",
+    "@llvm//:LLVMX86AsmPrinter",
+    "@llvm//:LLVMX86CodeGen",
+    "@llvm//:LLVMX86Desc",
+    "@llvm//:LLVMX86Disassembler",
+    "@llvm//:LLVMX86Info",
+    "@llvm//:LLVMX86Utils",
+    "@llvm//:LLVMXRay",
+  ],
+)
+
+
