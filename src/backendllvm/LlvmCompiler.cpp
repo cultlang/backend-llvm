@@ -225,6 +225,11 @@ void LlvmCompileState::genReturn(llvm::Value* v)
 	_abi->genReturn(v);
 }
 
+llvm::Value* LlvmCompileState::genCall(llvm::Value* calle, std::vector<llvm::Value*> const& args)
+{
+	return _abi->genCall(calle, args);
+}
+
 /******************************************************************************
 ** LlvmAbiBase
 ******************************************************************************/
@@ -258,6 +263,11 @@ void LlvmAbiBase::doFunctionPost()
 void LlvmAbiBase::genReturn(llvm::Value* v)
 {
 	_c->irBuilder->CreateRet(v);
+}
+
+llvm::Value* LlvmAbiBase::genCall(llvm::Value* callee, std::vector<llvm::Value*> const& args)
+{
+	return _c->irBuilder->CreateCall(callee, args);
 }
 
 /******************************************************************************

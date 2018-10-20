@@ -21,6 +21,7 @@ namespace lisp
 		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPost() = 0;
 
 		CULTLANG_BACKENDLLVM_EXPORTED virtual void genReturn(llvm::Value*) = 0;
+		CULTLANG_BACKENDLLVM_EXPORTED virtual llvm::Value* genCall(llvm::Value*, std::vector<llvm::Value*> const& args) = 0;
 	};
 
 	/******************************************************************************
@@ -120,6 +121,7 @@ namespace lisp
 		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* genInstanceAsConstant(instance<> inst);
 		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* genInstanceCast(llvm::Value*, types::TypeId type);
 		CULTLANG_BACKENDLLVM_EXPORTED void genReturn(llvm::Value*);
+		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* genCall(llvm::Value*, std::vector<llvm::Value*> const& args);
 
 		// Forwarding helpers
 	public:
@@ -155,6 +157,7 @@ namespace lisp
 		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPost() override;
 
 		CULTLANG_BACKENDLLVM_EXPORTED virtual void genReturn(llvm::Value*) override;
+		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* genCall(llvm::Value*, std::vector<llvm::Value*> const& args) override;
 	};
 
 	/******************************************************************************

@@ -66,6 +66,19 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 		c->lastReturnedValue = c->genInstanceAsConstant(value);
 	});
 	sem->builtin_implementMultiMethod("compile",
+		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<Resolve> ast)
+	{
+		auto binding = ast->getBinding();
+		auto bindvalue = binding->getSite()->valueAst();
+
+		// TODO make MM:
+		if (bindvalue.isType<lisp::MultiMethod>())
+		{
+			auto bindmm = bindvalue.asType<lisp::MultiMethod>();
+			//bindmm->call_internal();
+		}
+	});
+	sem->builtin_implementMultiMethod("compile",
 		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<lisp::Function> ast)
 	{
 		c->setModule(ast->getSemantics()->getModule());
@@ -101,26 +114,12 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 			args.push_back(c->lastReturnedValue);
 		}
 
+		c->compile(ast->calleeAst());
+
+		c->genCall(c->lastReturnedValue, args);
 	});
 
-	/*
-	sem->builtin_implementMultiMethod("compile",
-		[](instance<LlvmCompiler> compiler, instance<CallSite> ast)
-	{
-		// First we need a callee
-
-		auto count = ast->argCount();
-		for (auto i = 0; i < count; i++)
-		{
-			compiler->compile(ast->argAst(i));
-		}
-
-		// Now we can get a 
-
-		compiler->state->irBuilder->CreateCall()
-	});
-	*/
-
+	module->getNamespace()->refreshBackends();
 	module->getNamespace()->get<LlvmBackend>()->getCompiler()->builtin_validateSpecialForms(module);
 }
 

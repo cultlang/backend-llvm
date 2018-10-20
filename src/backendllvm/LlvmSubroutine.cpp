@@ -104,7 +104,7 @@ LlvmBackend::JitModule LlvmSubroutine::specialize(std::vector<TypeId>* types)
 	if (!verify_str.empty())
 		backend->getNamespace()->getEnvironment()->log()->info(verify_str);
 
-	//ir->dump();
+	ir->print(llvm::errs(), nullptr);
 
 	_jit_handle_generic = cantFail(backend->_compileLayer.addModule(ir, backend->_resolver));
 	_jitted = true;
@@ -129,7 +129,7 @@ instance<> LlvmSubroutine::invoke(GenericInvoke const& invk)
 std::string LlvmSubroutine::stringifyPrototypeIr()
 {
 	auto function = _ast.asFeature<Function>();
-	auto name = LlvmBackend::mangledName(function);
+	auto name = LlvmBackend::mangledName(function, "windows");
 
 	auto func = _module->getIr()->getFunction(name);
 	if (func == nullptr)
