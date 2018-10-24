@@ -23,8 +23,7 @@
 
 
 // Vendor
-#include <spdlog/spdlog.h>
-#include <spdlog/fmt/ostr.h>
+/// Lisp configures spdlog
 
 // Deps
 #include "util/all.h"

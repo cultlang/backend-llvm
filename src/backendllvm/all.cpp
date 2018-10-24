@@ -61,6 +61,9 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 	sem->builtin_implementMultiMethod("compile",
 		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<Constant> ast)
 	{
+		SPDLOG_TRACE(c->currentModule->getNamespace()->getEnvironment()->log(),
+			"compile/Constant");
+
 		auto value = ast->getValue();
 
 		c->lastReturnedValue = c->genInstanceAsConstant(value);
@@ -68,15 +71,56 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 	sem->builtin_implementMultiMethod("compile",
 		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<Resolve> ast)
 	{
+		SPDLOG_TRACE(c->currentModule->getNamespace()->getEnvironment()->log(),
+			"compile/Resolve");
+
 		auto binding = ast->getBinding();
-		auto bindvalue = binding->getSite()->valueAst();
+		auto binding_scope = binding->getScope();
 
 		// TODO make MM:
-		if (bindvalue.isType<lisp::MultiMethod>())
+		if (binding_scope.isType<lisp::Block>())
 		{
-			auto bindmm = bindvalue.asType<lisp::MultiMethod>();
-			//bindmm->call_internal();
+			c->lastReturnedValue = c->getScopeValue(binding);
+			if (ast->isGetter())
+				c->lastReturnedValue = c->irBuilder->CreateLoad(c->lastReturnedValue);
+			
+			return;
 		}
+		// TODO: Add function scope here
+		else // Implicitly scope level, may also be fall through for constants
+		{
+			auto bindvalue = binding->getSite()->valueAst();
+
+			// TODO make MM:
+			if (bindvalue.isType<lisp::MultiMethod>())
+			{
+				auto bindmm = bindvalue.asType<lisp::MultiMethod>();
+				//bindmm->call_internal();
+			}
+			else if (bindvalue.isType<lisp::Function>())
+			{
+				auto bindfn = bindvalue.asType<lisp::Function>();
+				auto bindfnTy = llvm::PointerType::get(c->getLlvmType(bindfn->subroutine_signature()), 0);
+			}
+
+			throw stdext::exception("Resolving `{0}` to bindsite `{1}`.", binding->getSymbol(), bindvalue);
+		}
+
+		throw stdext::exception("Resolving `{0}` is not compilable yet.", binding->getSymbol());
+	});
+	sem->builtin_implementMultiMethod("compile",
+		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<Assign> ast)
+	{
+		SPDLOG_TRACE(c->currentModule->getNamespace()->getEnvironment()->log(),
+			"compile/Assign");
+
+		c->compile(ast->slotAst());
+		auto storeLoc = c->lastReturnedValue;
+
+		c->compile(ast->valueAst());
+		auto storeVal = c->lastReturnedValue;
+
+		c->genInstanceAssign(storeLoc, storeVal);
 	});
 	sem->builtin_implementMultiMethod("compile",
 		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<lisp::Function> ast)
@@ -84,15 +128,23 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 		c->setModule(ast->getSemantics()->getModule());
 		c->setFunction(ast);
 
-		// TODO read through args, set names
+		SPDLOG_TRACE(c->currentModule->getNamespace()->getEnvironment()->log(),
+			"compile/Function");
+
+		// TODO read through args, set names (do this with push scope and a specialization there)
 
 		c->compile(ast->bodyAst());
 
-		c->genReturn(c->genInstanceCast(c->lastReturnedValue, types::None));
+		c->genReturn(c->lastReturnedValue);
 	});
 	sem->builtin_implementMultiMethod("compile",
 		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<Block> ast)
 	{
+		SPDLOG_TRACE(c->currentModule->getNamespace()->getEnvironment()->log(),
+			"compile/Block");
+
+		c->pushScope(ast);
+
 		auto count = ast->statementCount();
 		for (auto i = 0; i < count; i++)
 		{
@@ -101,8 +153,32 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 		// The last returned value is implictly set here
 	});
 	sem->builtin_implementMultiMethod("compile",
+		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<BindSite> ast)
+	{
+		SPDLOG_TRACE(c->currentModule->getNamespace()->getEnvironment()->log(),
+			"compile/BindSite");
+
+		// TODO elide scope lookup (and scope array size) for constants
+
+		if (ast->isDynamicBind())
+			throw stdext::exception("Compiler does not support dynamic binds.");
+		if (ast->isAttachSite())
+			throw stdext::exception("Compiler does not support attach.");
+
+		auto storeLoc = c->getScopeValue(ast->getBinding());
+
+		// Dispatch the below to assign some how?
+		c->compile(ast->valueAst());
+		auto storeVal = c->lastReturnedValue;
+
+		c->genInstanceAssign(storeLoc, storeVal);
+	});
+	sem->builtin_implementMultiMethod("compile",
 		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<CallSite> ast)
 	{
+		SPDLOG_TRACE(c->currentModule->getNamespace()->getEnvironment()->log(),
+			"compile/CallSite");
+
 		auto count = ast->argCount();
 
 		std::vector<llvm::Value*> args;

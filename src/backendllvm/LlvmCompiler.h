@@ -98,12 +98,25 @@ namespace lisp
 		instance<lisp::Function> currentFunction;
 		llvm::Function* codeFunction;
 
+		llvm::DataLayout* dataLayout;
+
 		llvm::IRBuilder<>* irBuilder;
 		llvm::Value* lastReturnedValue;
+
+		struct ScopeMap
+		{
+			instance<lisp::SScope> scope;
+			llvm::Value* alloc;
+		};
+		std::vector<ScopeMap> scopeStack;
+
+	private:
+		llvm::Function* _llfn_memcpy;
 
 	public:
 		CULTLANG_BACKENDLLVM_EXPORTED LlvmCompileState(instance<LlvmCompiler> compiler);
 		CULTLANG_BACKENDLLVM_EXPORTED void craft_setupInstance();
+		CULTLANG_BACKENDLLVM_EXPORTED ~LlvmCompileState();
 
 		CULTLANG_BACKENDLLVM_EXPORTED instance<LlvmCompiler> getCompiler() const;
 
@@ -116,12 +129,19 @@ namespace lisp
 		CULTLANG_BACKENDLLVM_EXPORTED void setModule(instance<lisp::Module> module);
 		CULTLANG_BACKENDLLVM_EXPORTED void setFunction(instance<lisp::Function> func);
 
+		// scope manipulation
+	public:
+		CULTLANG_BACKENDLLVM_EXPORTED void pushScope(instance<lisp::SScope> scope);
+		CULTLANG_BACKENDLLVM_EXPORTED void popScope();
+		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* getScopeValue(instance<lisp::Binding> bind);
+
 		// compile helpers
 	public:
 		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* genInstanceAsConstant(instance<> inst);
 		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* genInstanceCast(llvm::Value*, types::TypeId type);
 		CULTLANG_BACKENDLLVM_EXPORTED void genReturn(llvm::Value*);
 		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* genCall(llvm::Value*, std::vector<llvm::Value*> const& args);
+		CULTLANG_BACKENDLLVM_EXPORTED void genInstanceAssign(llvm::Value* dest, llvm::Value* src);
 
 		// Forwarding helpers
 	public:

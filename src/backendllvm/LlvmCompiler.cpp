@@ -131,10 +131,14 @@ LlvmCompileState::LlvmCompileState(instance<LlvmCompiler> compiler)
 	codeModule = nullptr;
 	codeFunction = nullptr;
 }
-
 void LlvmCompileState::craft_setupInstance()
 {
 	_abi = instance<LlvmAbiWindows>::make(craft_instance());
+}
+LlvmCompileState::~LlvmCompileState()
+{
+	if (codeModule != nullptr)
+		delete dataLayout;
 }
 
 instance<LlvmCompiler> LlvmCompileState::getCompiler() const
@@ -154,7 +158,7 @@ void LlvmCompileState::compile(instance<lisp::SCultSemanticNode> node)
 	{
 		getCompiler()->getBackend()
 			->getNamespace()->getEnvironment()
-			->log()->warn("Compiler does not support node `{1}`, default returned: {0}", ex.what(), node);
+			->log()->warn("Compiler does not support node `{1}`, default returned, exception: {0}", ex.what(), node);
 	}
 }
 
@@ -162,6 +166,13 @@ void LlvmCompileState::setModule(instance<lisp::Module> module)
 {
 	currentModule = module;
 	codeModule = module->require<LlvmModule>()->getIr().get();
+	dataLayout = new llvm::DataLayout(codeModule);
+
+	_llfn_memcpy = llvm::Intrinsic::getDeclaration(codeModule, llvm::Intrinsic::memcpy, {
+		llvm::Type::getInt8PtrTy(*context),
+		llvm::Type::getInt8PtrTy(*context),
+		llvm::Type::getInt64Ty(*context),
+	});
 }
 void LlvmCompileState::setFunction(instance<lisp::Function> func)
 {
@@ -183,6 +194,40 @@ void LlvmCompileState::setFunction(instance<lisp::Function> func)
 	_abi->doFunctionPre();
 }
 
+void LlvmCompileState::pushScope(instance<lisp::SScope> scope)
+{
+	lastReturnedValue = irBuilder->CreateAlloca(
+			_compiler->type_anyInstance,
+			llvm::ConstantInt::get(llvm::Type::getInt64Ty(*context), scope->getSlotCount())
+		);
+
+	scopeStack.push_back({ scope, lastReturnedValue });
+}
+void LlvmCompileState::popScope()
+{
+	scopeStack.pop_back();
+}
+llvm::Value* LlvmCompileState::getScopeValue(instance<lisp::Binding> bind)
+{
+	llvm::Value* alloc = nullptr;
+	auto searchScope = bind->getScope();
+	for (auto map_it = scopeStack.rbegin(); map_it != scopeStack.rend(); ++map_it)
+	{
+		if (map_it->scope == searchScope)
+		{
+			alloc = map_it->alloc;
+			break;
+		}
+	}
+
+	if (alloc == nullptr)
+		return nullptr;
+
+	return irBuilder->CreateGEP(alloc, {
+		llvm::ConstantInt::get(*context, llvm::APInt(32, bind->getIndex()))
+	}, bind->getSymbol()->getDisplay());
+}
+
 llvm::Value* LlvmCompileState::genInstanceAsConstant(instance<> inst)
 {
 	auto entry = _compiler->_getTypeCache(inst.typeId());
@@ -190,15 +235,12 @@ llvm::Value* LlvmCompileState::genInstanceAsConstant(instance<> inst)
 	return llvm::ConstantStruct::getAnon(
 		{
 			llvm::ConstantExpr::getIntToPtr(
-				llvm::ConstantInt::get(
-					llvm::Type::getInt64Ty(*context),
-					(uint64_t)inst.asInternalPointer()),
+				llvm::ConstantInt::get(*context, llvm::APInt(64, (uint64_t)inst.asInternalPointer())),
 				llvm::PointerType::get(_compiler->type_instanceMetaHeader, 0)),
 			llvm::ConstantExpr::getIntToPtr(
-				llvm::ConstantInt::get(
-					llvm::Type::getInt64Ty(*context),
-					(uint64_t)inst.get()),
-				llvm::PointerType::get(entry.opaque_struct, 0))
+				llvm::ConstantInt::get(*context, llvm::APInt(64, (uint64_t)inst.get())),
+				_compiler->type_anyPtr)
+				//llvm::PointerType::get(entry.opaque_struct, 0)) // TODO use When we add types properly
 		});
 }
 
@@ -218,6 +260,31 @@ llvm::Value* LlvmCompileState::genInstanceCast(llvm::Value* value, TypeId type)
 			});
 	}
 	else throw stdext::exception("Runtime casting not supported yet.");
+}
+
+void LlvmCompileState::genInstanceAssign(llvm::Value* dest, llvm::Value* src)
+{
+	if (auto *srcconst = dyn_cast<llvm::Constant>(src))
+	{
+		irBuilder->CreateStore(srcconst, dest);
+	}
+	else if (!src->getType()->isPointerTy())
+	{
+		irBuilder->CreateStore(src, dest);
+	}
+	else
+	{
+		// TODO: do something about this:
+		auto inst_size = dataLayout->getTypeAllocSize(_compiler->type_anyInstance);
+
+		irBuilder->CreateCall(_llfn_memcpy, {
+			irBuilder->CreatePointerCast(dest, _compiler->type_anyPtr),
+			irBuilder->CreatePointerCast(src, _compiler->type_anyPtr),
+			llvm::ConstantInt::get(*context, llvm::APInt(64, inst_size)),
+			llvm::ConstantInt::get(*context, llvm::APInt(32, 0)), // Remove in llvm:v7
+			llvm::ConstantInt::get(*context, llvm::APInt(1, false))
+		});
+	}
 }
 
 void LlvmCompileState::genReturn(llvm::Value* v)
@@ -300,17 +367,11 @@ void LlvmAbiWindows::doFunctionPre()
 void LlvmAbiWindows::genReturn(llvm::Value* v)
 {
 	// Assert struct return
+	auto& context = _c->getCompiler()->getBackend()->context;
 
 	auto ret = _c->codeFunction->arg_begin() + 0;
 
-	if (auto *vconst = dyn_cast<llvm::Constant>(v))
-	{
-		_c->irBuilder->CreateStore(vconst, ret);
-	}
-	else
-	{
-		auto callee = llvm::Intrinsic::getDeclaration(_c->codeModule, llvm::Intrinsic::memcpy, {});
-	}
+	_c->genInstanceAssign(ret, v);
 
 	_c->irBuilder->CreateRetVoid();
 }
