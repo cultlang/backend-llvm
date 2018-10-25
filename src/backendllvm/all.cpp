@@ -49,7 +49,7 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 			GenericInvoke invoke(args.args.size());
 			std::copy(args.args.begin(), args.args.end(), std::back_inserter(invoke.args));
 
-			sub->invoke(invoke);
+			return sub->invoke(invoke);
 		}
 		else throw stdext::exception("`{0}` is not a callable object.", node);
 	});
@@ -230,16 +230,7 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 			{
 				auto sub = res.asType<LlvmSubroutine>();
 
-				std::string foo;
-				sub->getLlvmType()->print(llvm::raw_string_ostream(foo), true);
-				c->currentModule->getNamespace()->getEnvironment()->log()->debug(foo);
-
-				std::string bar ;
-				for(auto i : args)
-				{
-					i->print(llvm::raw_string_ostream(bar), true);
-				}
-				c->currentModule->getNamespace()->getEnvironment()->log()->debug(bar);
+				sub->specialize();
 
 				auto callee = c->codeModule->getOrInsertFunction(sub->getName(), sub->getLlvmType(), {});
 				c->genCall(callee, args);
