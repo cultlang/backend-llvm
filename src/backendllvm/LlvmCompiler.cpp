@@ -311,6 +311,14 @@ void LlvmCompileState::genInstanceAssign(llvm::Value* dest, llvm::Value* src)
 	}
 }
 
+llvm::Value* LlvmCompileState::genPushInstance()
+{
+	return irBuilder->CreateAlloca(
+			_compiler->type_anyInstance,
+			llvm::ConstantInt::get(llvm::Type::getInt64Ty(*context), 1)
+		);
+}
+
 void LlvmCompileState::genReturn(llvm::Value* v)
 {
 	_abi->genReturn(v);

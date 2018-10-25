@@ -1,0 +1,12 @@
+(require "file:dlls.cult")
+(require "builtin:cult/llvm")
+
+(define dontadd (function (a b)
+    a
+))
+
+(define calling (function (f g)
+    (dontadd f g)
+))
+
+(print (llvm-call calling 13 14))

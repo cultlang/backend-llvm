@@ -44,7 +44,7 @@ LlvmBackend::JitModule LlvmSubroutine::specialize(std::vector<TypeId>* types)
 	auto backend = _module->getBackend();
 
 	auto function = _ast.asFeature<Function>();
-	auto name = LlvmBackend::mangledName(function, "windows");
+	auto name = getName();
 	auto type = backend->getCompiler()->getLlvmType(function->subroutine_signature());
 
 	auto proto_func = _module->getIr()->getFunction(name);
@@ -115,7 +115,7 @@ LlvmBackend::JitModule LlvmSubroutine::specialize(std::vector<TypeId>* types)
 instance<> LlvmSubroutine::invoke(GenericInvoke const& invk)
 {
 	auto function = _ast.asFeature<Function>();
-	auto name = LlvmBackend::mangledName(function, "windows");
+	auto name = getName();
 
 	specialize();
 
@@ -129,7 +129,7 @@ instance<> LlvmSubroutine::invoke(GenericInvoke const& invk)
 std::string LlvmSubroutine::stringifyPrototypeIr()
 {
 	auto function = _ast.asFeature<Function>();
-	auto name = LlvmBackend::mangledName(function, "windows");
+	auto name = getName();
 
 	auto func = _module->getIr()->getFunction(name);
 	if (func == nullptr)
@@ -140,4 +140,22 @@ std::string LlvmSubroutine::stringifyPrototypeIr()
 	func->print(res_strm);
 
 	return res_str;
+}
+
+llvm::FunctionType* LlvmSubroutine::getLlvmType()
+{
+	auto backend = _module->getBackend();
+	auto compiler = backend->getCompiler();
+	if(_ast.isType<lisp::Function>())
+	{
+		return compiler->getLlvmType(_ast.asType<lisp::Function>()->subroutine_signature());
+	}
+
+	throw stdext::exception("Unsupported ast Type {}", _ast);
+}
+
+std::string LlvmSubroutine::getName()
+{
+	auto function = _ast.asFeature<Function>();
+	return LlvmBackend::mangledName(function, "windows");
 }

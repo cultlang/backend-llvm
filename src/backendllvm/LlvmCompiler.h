@@ -104,6 +104,7 @@ namespace lisp
 
 		llvm::IRBuilder<>* irBuilder;
 		llvm::Value* lastReturnedValue;
+		instance<> lastReturnedInstance;
 
 		struct ScopeMap
 		{
@@ -136,7 +137,7 @@ namespace lisp
 		CULTLANG_BACKENDLLVM_EXPORTED void pushScope(instance<lisp::SScope> scope);
 		CULTLANG_BACKENDLLVM_EXPORTED void popScope();
 		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* getScopeValue(instance<lisp::Binding> bind);
-
+		
 		// compile helpers
 	public:
 		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* genInstanceAsConstant(instance<> inst);
@@ -144,6 +145,7 @@ namespace lisp
 		CULTLANG_BACKENDLLVM_EXPORTED void genReturn(llvm::Value*);
 		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* genCall(llvm::Value*, std::vector<llvm::Value*> const& args);
 		CULTLANG_BACKENDLLVM_EXPORTED void genInstanceAssign(llvm::Value* dest, llvm::Value* src);
+		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* genPushInstance();
 
 		// Forwarding helpers
 	public:

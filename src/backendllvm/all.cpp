@@ -79,32 +79,23 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 
 		// TODO make MM:
 		//binding_scope.isType<lisp::Block>()
-		if (true)
+		if (!binding_scope.isType<CultSemantics>())
 		{
 			c->lastReturnedValue = c->getScopeValue(binding);
-			if (ast->isGetter()
-				&& c->lastReturnedValue->getType()->isPointerTy()) // TODO Use AST To determine if binding is value
-				c->lastReturnedValue = c->irBuilder->CreateLoad(c->lastReturnedValue);
+			// if (ast->isGetter()
+			// 	&& c->lastReturnedValue->getType()->isPointerTy()) // TODO Use AST To determine if binding is value
+			// 	c->lastReturnedValue = c->irBuilder->CreateLoad(c->lastReturnedValue);
 			
+			c->lastReturnedInstance = nullptr;
 			return;
 		}
 		else // Implicitly scope level, may also be fall through for constants
 		{
-			auto bindvalue = binding->getSite()->valueAst();
-
-			// TODO make MM:
-			if (bindvalue.isType<lisp::MultiMethod>())
-			{
-				auto bindmm = bindvalue.asType<lisp::MultiMethod>();
-				//bindmm->call_internal();
-			}
-			else if (bindvalue.isType<lisp::Function>())
-			{
-				auto bindfn = bindvalue.asType<lisp::Function>();
-				auto bindfnTy = llvm::PointerType::get(c->getLlvmType(bindfn->subroutine_signature()), 0);
-			}
-
-			throw stdext::exception("Resolving `{0}` to bindsite `{1}`.", binding->getSymbol(), bindvalue);
+			c->lastReturnedInstance = binding->getSite()->valueAst();
+			c->lastReturnedValue = nullptr;
+			return;
+			
+			// throw stdext::exception("Resolving `{0}` to bindsite `{1}`.", binding->getSymbol(), bindvalue);
 		}
 
 		throw stdext::exception("Resolving `{0}` is not compilable yet.", binding->getSymbol());
@@ -211,7 +202,11 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 		auto count = ast->argCount();
 
 		std::vector<llvm::Value*> args;
-		args.reserve(count);
+		//TODO Windows ABI
+		args.reserve(count + 1);
+
+		auto return_value = c->genPushInstance();
+		args.push_back(return_value);
 
 		for (auto i = 0; i < count; ++i)
 		{
@@ -220,8 +215,46 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 		}
 
 		c->compile(ast->calleeAst());
+		if(!c->lastReturnedInstance)
+		{
+			c->genCall(c->lastReturnedValue, args);
+			c->lastReturnedValue = return_value;
+			return;
+		}
+		else if(c->lastReturnedInstance.isType<lisp::Function>())
+		{
+			auto bindfn = c->lastReturnedInstance.asType<lisp::Function>();
+			auto res = Execution::getCurrent()->getNamespace()->get<LlvmBackend>()->require(bindfn);
 
-		c->genCall(c->lastReturnedValue, args);
+			if (res.isType<LlvmSubroutine>())
+			{
+				auto sub = res.asType<LlvmSubroutine>();
+
+				std::string foo;
+				sub->getLlvmType()->print(llvm::raw_string_ostream(foo), true);
+				c->currentModule->getNamespace()->getEnvironment()->log()->debug(foo);
+
+				std::string bar ;
+				for(auto i : args)
+				{
+					i->print(llvm::raw_string_ostream(bar), true);
+				}
+				c->currentModule->getNamespace()->getEnvironment()->log()->debug(bar);
+
+				auto callee = c->codeModule->getOrInsertFunction(sub->getName(), sub->getLlvmType(), {});
+				c->genCall(callee, args);
+				c->lastReturnedValue = return_value;
+				return;
+			}
+			else throw stdext::exception("`{0}` is not a callable object.", res);
+		}
+		else if(c->lastReturnedInstance.isType<lisp::MultiMethod>()) 
+		{
+			// auto bindmm = bindvalue.asType<lisp::MultiMethod>();
+			// // 	//bindmm->call_internal();
+		}
+		
+		throw stdext::exception("Unsupported CallSite {}", c->lastReturnedInstance);
 	});
 
 	module->getNamespace()->refreshBackends();

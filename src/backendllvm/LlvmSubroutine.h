@@ -35,5 +35,7 @@ namespace lisp
 		CULTLANG_BACKENDLLVM_EXPORTED instance<> invoke(types::GenericInvoke const&);
 
 		CULTLANG_BACKENDLLVM_EXPORTED std::string stringifyPrototypeIr();
+		CULTLANG_BACKENDLLVM_EXPORTED llvm::FunctionType* getLlvmType();
+		CULTLANG_BACKENDLLVM_EXPORTED std::string getName();
 	};
 }}
