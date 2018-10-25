@@ -49,7 +49,7 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 			GenericInvoke invoke(args.args.size());
 			std::copy(args.args.begin(), args.args.end(), std::back_inserter(invoke.args));
 
-			return sub->invoke(invoke);
+			sub->invoke(invoke);
 		}
 		else throw stdext::exception("`{0}` is not a callable object.", node);
 	});
@@ -78,15 +78,16 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 		auto binding_scope = binding->getScope();
 
 		// TODO make MM:
-		if (binding_scope.isType<lisp::Block>())
+		//binding_scope.isType<lisp::Block>()
+		if (true)
 		{
 			c->lastReturnedValue = c->getScopeValue(binding);
-			if (ast->isGetter())
+			if (ast->isGetter()
+				&& c->lastReturnedValue->getType()->isPointerTy()) // TODO Use AST To determine if binding is value
 				c->lastReturnedValue = c->irBuilder->CreateLoad(c->lastReturnedValue);
 			
 			return;
 		}
-		// TODO: Add function scope here
 		else // Implicitly scope level, may also be fall through for constants
 		{
 			auto bindvalue = binding->getSite()->valueAst();
@@ -132,6 +133,12 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 			"compile/Function");
 
 		// TODO read through args, set names (do this with push scope and a specialization there)
+		c->pushScope(ast);
+		auto count = ast->argCount();
+		for(auto i = 0; i < count; i++)
+		{
+			c->compile(ast->argAst(i));
+		}
 
 		c->compile(ast->bodyAst());
 
@@ -153,6 +160,28 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 		// The last returned value is implictly set here
 	});
 	sem->builtin_implementMultiMethod("compile",
+		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<Variable> ast)
+	{
+		SPDLOG_TRACE(c->currentModule->getNamespace()->getEnvironment()->log(),
+			"compile/Variable");
+		
+		auto storeLoc = c->getScopeValue(ast->getBinding());
+
+		// Dispatch the below to assign some how?
+		auto iAst = ast->initalizerAst();
+		if(iAst) 
+		{
+			c->compile(ast->initalizerAst());
+			auto storeVal = c->lastReturnedValue;
+
+			c->genInstanceAssign(storeLoc, storeVal);
+		}
+		else
+		{
+			c->lastReturnedValue = nullptr;
+		}
+	});
+	sem->builtin_implementMultiMethod("compile",
 		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<BindSite> ast)
 	{
 		SPDLOG_TRACE(c->currentModule->getNamespace()->getEnvironment()->log(),
@@ -170,8 +199,8 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 		// Dispatch the below to assign some how?
 		c->compile(ast->valueAst());
 		auto storeVal = c->lastReturnedValue;
-
-		c->genInstanceAssign(storeLoc, storeVal);
+		if(storeVal)
+			c->genInstanceAssign(storeLoc, storeVal);
 	});
 	sem->builtin_implementMultiMethod("compile",
 		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<CallSite> ast)

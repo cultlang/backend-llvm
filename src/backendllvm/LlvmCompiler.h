@@ -20,6 +20,8 @@ namespace lisp
 		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPre() = 0;
 		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPost() = 0;
 
+		CULTLANG_BACKENDLLVM_EXPORTED virtual size_t getArgumentIndex(size_t) = 0;
+
 		CULTLANG_BACKENDLLVM_EXPORTED virtual void genReturn(llvm::Value*) = 0;
 		CULTLANG_BACKENDLLVM_EXPORTED virtual llvm::Value* genCall(llvm::Value*, std::vector<llvm::Value*> const& args) = 0;
 	};
@@ -106,7 +108,7 @@ namespace lisp
 		struct ScopeMap
 		{
 			instance<lisp::SScope> scope;
-			llvm::Value* alloc;
+			std::map<instance<Binding>, llvm::Value*> values;
 		};
 		std::vector<ScopeMap> scopeStack;
 
@@ -176,6 +178,8 @@ namespace lisp
 		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPre() override;
 		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPost() override;
 
+		CULTLANG_BACKENDLLVM_EXPORTED virtual size_t getArgumentIndex(size_t) override;
+
 		CULTLANG_BACKENDLLVM_EXPORTED virtual void genReturn(llvm::Value*) override;
 		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* genCall(llvm::Value*, std::vector<llvm::Value*> const& args) override;
 	};
@@ -197,6 +201,8 @@ namespace lisp
 		CULTLANG_BACKENDLLVM_EXPORTED virtual std::string abiName() override;
 
 		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPre() override;
+
+		CULTLANG_BACKENDLLVM_EXPORTED virtual size_t getArgumentIndex(size_t) override;
 
 		CULTLANG_BACKENDLLVM_EXPORTED virtual void genReturn(llvm::Value*) override;
 	};

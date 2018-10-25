@@ -1,0 +1,8 @@
+(require "file:dlls.cult")
+(require "builtin:cult/llvm")
+
+(define identity (function (f g h i j k)
+    f
+))
+
+(print (llvm-call identity 13 14 15 16 17 18))

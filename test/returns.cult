@@ -1,0 +1,9 @@
+(require "file:dlls.cult")
+(require "builtin:cult/llvm")
+
+(define returns (function () 
+    (define a 15)
+    a  
+))
+
+(print (llvm-call returns ))

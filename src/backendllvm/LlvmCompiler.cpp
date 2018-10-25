@@ -96,7 +96,7 @@ llvm::FunctionType* LlvmCompiler::getLlvmType(types::ExpressionStore signature)
 
 	for (auto arg : tuple->entries)
 	{
-		args.push_back(getLlvmType(arg));
+		args.push_back(llvm::PointerType::get(getLlvmType(arg), 0));
 	}
 
 	//return_ = getLlvmType(arrow->output);
@@ -196,12 +196,43 @@ void LlvmCompileState::setFunction(instance<lisp::Function> func)
 
 void LlvmCompileState::pushScope(instance<lisp::SScope> scope)
 {
-	lastReturnedValue = irBuilder->CreateAlloca(
+	// TODO make MM
+	scopeStack.push_back({ scope, {} });
+	if(scope.isType<Block>())
+	{
+		if(!scope->getSlotCount())
+			return;
+
+		lastReturnedValue = irBuilder->CreateAlloca(
 			_compiler->type_anyInstance,
 			llvm::ConstantInt::get(llvm::Type::getInt64Ty(*context), scope->getSlotCount())
 		);
+		auto count = scope->getSlotCount();
+		for(auto i = 0; i < count; i++)
+		{
+			auto bind = scope->lookupSlot(i);
+			scopeStack.back().values[bind] = irBuilder->CreateGEP(lastReturnedValue, {
+				llvm::ConstantInt::get(*context, llvm::APInt(32, i))
+			}, bind->getSymbol()->getDisplay());
+		}
+	}
+	else if(scope.isType<lisp::Function>())
+	{
+		//XXX(clarkrinker) Branch Assumes ~scope~ is scope that was set by SetFunction
 
-	scopeStack.push_back({ scope, lastReturnedValue });
+		auto fn = scope.asType<lisp::Function>();
+
+		auto count = fn->argCount();
+		for(auto i = 0; i < count; i++)
+		{
+			auto bind = scope->lookupSlot(i);
+			auto arg = codeFunction->arg_begin() + _abi->getArgumentIndex(i);
+			arg->setName(bind->getSymbol()->getDisplay());
+			scopeStack.back().values[bind] = arg;
+		}
+	}
+	
+	
 }
 void LlvmCompileState::popScope()
 {
@@ -215,17 +246,10 @@ llvm::Value* LlvmCompileState::getScopeValue(instance<lisp::Binding> bind)
 	{
 		if (map_it->scope == searchScope)
 		{
-			alloc = map_it->alloc;
-			break;
+			return map_it->values[bind];
 		}
 	}
-
-	if (alloc == nullptr)
-		return nullptr;
-
-	return irBuilder->CreateGEP(alloc, {
-		llvm::ConstantInt::get(*context, llvm::APInt(32, bind->getIndex()))
-	}, bind->getSymbol()->getDisplay());
+	return nullptr;
 }
 
 llvm::Value* LlvmCompileState::genInstanceAsConstant(instance<> inst)
@@ -327,6 +351,12 @@ void LlvmAbiBase::doFunctionPost()
 
 }
 
+size_t LlvmAbiBase::getArgumentIndex(size_t i)
+{
+	return i;
+}
+
+
 void LlvmAbiBase::genReturn(llvm::Value* v)
 {
 	_c->irBuilder->CreateRet(v);
@@ -362,6 +392,11 @@ std::string LlvmAbiWindows::abiName()
 void LlvmAbiWindows::doFunctionPre()
 {
 	_c->codeFunction->addAttribute(1, llvm::Attribute::StructRet);
+}
+
+size_t LlvmAbiWindows::getArgumentIndex(size_t i)
+{
+	return i + 1;
 }
 
 void LlvmAbiWindows::genReturn(llvm::Value* v)
