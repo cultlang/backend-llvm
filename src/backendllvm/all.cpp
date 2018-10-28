@@ -66,7 +66,7 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 
 		auto value = ast->getValue();
 
-		c->lastReturnedValue = c->genInstanceAsConstant(value);
+		c->lastReturnedValue = c->genAsConstant(value);
 	});
 	sem->builtin_implementMultiMethod("compile",
 		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<Resolve> ast)
@@ -205,9 +205,6 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 		//TODO Windows ABI
 		args.reserve(count + 1);
 
-		auto return_value = c->genPushInstance();
-		args.push_back(return_value);
-
 		for (auto i = 0; i < count; ++i)
 		{
 			c->compile(ast->argAst(i));
@@ -217,8 +214,7 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 		c->compile(ast->calleeAst());
 		if(!c->lastReturnedInstance)
 		{
-			c->genCall(c->lastReturnedValue, args);
-			c->lastReturnedValue = return_value;
+			c->lastReturnedValue = c->genCall(c->lastReturnedValue, args);
 			return;
 		}
 		else if(c->lastReturnedInstance.isType<lisp::Function>())
@@ -233,16 +229,29 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 				sub->specialize();
 
 				auto callee = c->codeModule->getOrInsertFunction(sub->getName(), sub->getLlvmType(), {});
-				c->genCall(callee, args);
-				c->lastReturnedValue = return_value;
+
+				c->lastReturnedValue = c->genCall(callee, args);
 				return;
 			}
 			else throw stdext::exception("`{0}` is not a callable object.", res);
 		}
-		else if(c->lastReturnedInstance.isType<lisp::MultiMethod>()) 
+		//else if(c->lastReturnedInstance.isType<lisp::MultiMethod>()) 
+		//{
+		//	auto bindmm = bindvalue.asType<lisp::MultiMethod>();
+		//}
+		else if(c->lastReturnedInstance.hasFeature<lisp::PSubroutine>()) 
 		{
-			// auto bindmm = bindvalue.asType<lisp::MultiMethod>();
-			// // 	//bindmm->call_internal();
+			auto psub = c->lastReturnedInstance.getFeature<lisp::PSubroutine>();
+
+			auto subroutineCall = c->getInternalFunction("___cult__PSubroutine__runtime_execute");
+
+			auto sub = c->genAsConstant(c->lastReturnedInstance);
+			c->genSpillInstances(args);
+			auto argv = c->lastReturnedValue;
+			auto argc = c->genAsConstant(args.size());
+
+			c->lastReturnedValue = c->genCall(subroutineCall, {sub, argv, argc});
+			return;
 		}
 		
 		throw stdext::exception("Unsupported CallSite {}", c->lastReturnedInstance);

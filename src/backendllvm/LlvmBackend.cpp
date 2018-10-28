@@ -10,20 +10,6 @@ using namespace craft::lisp;
 using namespace llvm;
 using namespace llvm::orc;
 
-CULTLANG_BACKENDLLVM_EXPORTED instance<> __trampoline_interpreter(LlvmSubroutine* subroutine, instance<>* arry, size_t count)
-{
-	GenericInvoke invoke(count);
-	std::copy(arry, arry + count, std::back_inserter(invoke.args));
-
-	/*
-	auto frame = Execution::getCurrent();
-	auto ns = frame->getNamespace();
-	return ns->get<BootstrapInterpreter>()->exec();
-	*/
-
-	return instance<>();
-}
-
 CRAFT_DEFINE(LlvmBackend)
 {
 	_.use<PBackend>().singleton<LlvmBackendProvider>();
@@ -65,15 +51,17 @@ LlvmBackend::LlvmBackend(instance<Namespace> lisp)
 	// Lambda 1: Look back into the JIT itself to find symbols that are part of the same "logical dylib".
 	// Lambda 2: Search for external symbols in the host process.
 	_resolver = createLambdaResolver(
-		[&](const std::string &Name) {
-		if (auto Sym = _compileLayer.findSymbol(Name, false))
-			return Sym;
+		[&](std::string const& name) {
+		if (auto sym = _compileLayer.findSymbol(name, false))
+			return sym;
 		return JITSymbol(nullptr);
 	},
-		[](const std::string &Name) {
-		if (auto SymAddr =
-			RTDyldMemoryManager::getSymbolAddressInProcess(Name))
-			return JITSymbol(SymAddr, JITSymbolFlags::Exported);
+		[&](std::string const& name) {
+		auto internal_it = _internal_functions.find(name);
+		if (internal_it != _internal_functions.end())
+			return JITSymbol((uintptr_t)internal_it->second.funcptr, JITSymbolFlags::Exported);
+		if (auto sym_addr = RTDyldMemoryManager::getSymbolAddressInProcess(name))
+			return JITSymbol(sym_addr, JITSymbolFlags::Exported);
 		return JITSymbol(nullptr);
 	});
 }

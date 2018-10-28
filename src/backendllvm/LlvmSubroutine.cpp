@@ -45,7 +45,6 @@ LlvmBackend::JitModule LlvmSubroutine::specialize(std::vector<TypeId>* types)
 
 	auto function = _ast.asFeature<Function>();
 	auto name = getName();
-	auto type = backend->getCompiler()->getLlvmType(function->subroutine_signature());
 
 	auto proto_func = _module->getIr()->getFunction(name);
 	//_module->getIr()->dump();
@@ -54,7 +53,7 @@ LlvmBackend::JitModule LlvmSubroutine::specialize(std::vector<TypeId>* types)
 	ir->setDataLayout(backend->_dl);
 	ir->setTargetTriple(llvm::sys::getDefaultTargetTriple());
 
-	auto func = llvm::Function::Create(type, llvm::Function::ExternalLinkage, name, ir.get());
+	auto func = llvm::Function::Create(proto_func->getFunctionType(), llvm::Function::ExternalLinkage, name, ir.get());
 
 	// TODO: specialize for ABI type??
 	llvm::ValueToValueMapTy vvmap;

@@ -32,6 +32,8 @@ namespace lisp
 	private:
 		friend class LlvmBackendProvider;
 
+		friend class LlvmCompiler;
+
 		friend class LlvmModule;
 		friend class LlvmSubroutine;
 
@@ -54,6 +56,15 @@ namespace lisp
 
 		std::vector<_ModuleEntry> _modules;
 		std::map<instance<Module>, size_t> _modules_byInstance;
+
+		struct _InternalFunctionEntry
+		{
+			void* funcptr;
+
+			llvm::FunctionType* fntype;
+		};
+
+		std::map<std::string, _InternalFunctionEntry> _internal_functions;
 
 	public:
 		using JitModule = decltype(_compileLayer)::ModuleHandleT;

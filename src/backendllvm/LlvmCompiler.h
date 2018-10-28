@@ -20,7 +20,8 @@ namespace lisp
 		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPre() = 0;
 		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPost() = 0;
 
-		CULTLANG_BACKENDLLVM_EXPORTED virtual size_t getArgumentIndex(size_t) = 0;
+		CULTLANG_BACKENDLLVM_EXPORTED virtual size_t getArgumentIndex(size_t) const = 0;
+		CULTLANG_BACKENDLLVM_EXPORTED virtual llvm::FunctionType* getTypeSignature(llvm::FunctionType*) const = 0;
 
 		CULTLANG_BACKENDLLVM_EXPORTED virtual void genReturn(llvm::Value*) = 0;
 		CULTLANG_BACKENDLLVM_EXPORTED virtual llvm::Value* genCall(llvm::Value*, std::vector<llvm::Value*> const& args) = 0;
@@ -73,6 +74,8 @@ namespace lisp
 		CULTLANG_BACKENDLLVM_EXPORTED llvm::Type* getLlvmValuePointerType(types::TypeId type);
 		CULTLANG_BACKENDLLVM_EXPORTED llvm::Type* getLlvmType(types::IExpression* node);
 		CULTLANG_BACKENDLLVM_EXPORTED llvm::FunctionType* getLlvmType(types::ExpressionStore signature);
+
+		CULTLANG_BACKENDLLVM_EXPORTED llvm::FunctionType* getInternalFunctionType(std::string const& name) const;
 
 	public:
 
@@ -140,12 +143,16 @@ namespace lisp
 		
 		// compile helpers
 	public:
-		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* genInstanceAsConstant(instance<> inst);
+		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* getInternalFunction(std::string const& name);
+
+		CULTLANG_BACKENDLLVM_EXPORTED llvm::Constant* genAsConstant(size_t);
+		CULTLANG_BACKENDLLVM_EXPORTED llvm::Constant* genAsConstant(instance<> inst);
 		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* genInstanceCast(llvm::Value*, types::TypeId type);
 		CULTLANG_BACKENDLLVM_EXPORTED void genReturn(llvm::Value*);
 		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* genCall(llvm::Value*, std::vector<llvm::Value*> const& args);
-		CULTLANG_BACKENDLLVM_EXPORTED void genInstanceAssign(llvm::Value* dest, llvm::Value* src);
 		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* genPushInstance();
+		CULTLANG_BACKENDLLVM_EXPORTED void genInstanceAssign(llvm::Value* dest, llvm::Value* src);
+		CULTLANG_BACKENDLLVM_EXPORTED void genSpillInstances(std::vector<llvm::Value*> const& spill);
 
 		// Forwarding helpers
 	public:
@@ -153,7 +160,10 @@ namespace lisp
 		inline llvm::Type* getLlvmValueType(types::TypeId type) const { return getCompiler()->getLlvmValueType(type); }
 		inline llvm::Type* getLlvmValuePointerType(types::TypeId type) const { return getCompiler()->getLlvmValuePointerType(type); }
 		inline llvm::Type* getLlvmType(types::IExpression* node) const { return getCompiler()->getLlvmType(node); }
-		inline llvm::FunctionType* getLlvmType(types::ExpressionStore signature) const { return getCompiler()->getLlvmType(signature); }
+		inline llvm::FunctionType* getLlvmType(types::ExpressionStore signature) const
+		{
+			return _abi->getTypeSignature(getCompiler()->getLlvmType(signature));
+		}
 
 	};
 
@@ -180,10 +190,11 @@ namespace lisp
 		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPre() override;
 		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPost() override;
 
-		CULTLANG_BACKENDLLVM_EXPORTED virtual size_t getArgumentIndex(size_t) override;
+		CULTLANG_BACKENDLLVM_EXPORTED virtual size_t getArgumentIndex(size_t) const override;
+		CULTLANG_BACKENDLLVM_EXPORTED virtual llvm::FunctionType* getTypeSignature(llvm::FunctionType*) const override;
 
 		CULTLANG_BACKENDLLVM_EXPORTED virtual void genReturn(llvm::Value*) override;
-		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* genCall(llvm::Value*, std::vector<llvm::Value*> const& args) override;
+		CULTLANG_BACKENDLLVM_EXPORTED virtual llvm::Value* genCall(llvm::Value*, std::vector<llvm::Value*> const& args) override;
 	};
 
 	/******************************************************************************
@@ -204,8 +215,10 @@ namespace lisp
 
 		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPre() override;
 
-		CULTLANG_BACKENDLLVM_EXPORTED virtual size_t getArgumentIndex(size_t) override;
+		CULTLANG_BACKENDLLVM_EXPORTED virtual size_t getArgumentIndex(size_t) const override;
+		CULTLANG_BACKENDLLVM_EXPORTED virtual llvm::FunctionType* getTypeSignature(llvm::FunctionType*) const override;
 
 		CULTLANG_BACKENDLLVM_EXPORTED virtual void genReturn(llvm::Value*) override;
+		CULTLANG_BACKENDLLVM_EXPORTED virtual llvm::Value* genCall(llvm::Value*, std::vector<llvm::Value*> const& args) override;
 	};
 }}
