@@ -243,7 +243,7 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 		{
 			auto psub = c->lastReturnedInstance.getFeature<lisp::PSubroutine>();
 
-			auto subroutineCall = c->getInternalFunction("___cult__PSubroutine__runtime_execute");
+			auto subroutineCall = c->getInternalFunction("___cult__runtime_subroutine_execute");
 
 			auto sub = c->genAsConstant(c->lastReturnedInstance);
 			c->genSpillInstances(args);
@@ -254,7 +254,88 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 			return;
 		}
 		
-		throw stdext::exception("Unsupported CallSite {}", c->lastReturnedInstance);
+		throw stdext::exception("Callsite {} is not compilable yet.", c->lastReturnedInstance);
+	});
+	sem->builtin_implementMultiMethod("compile",
+		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<Condition> ast)
+	{
+		SPDLOG_TRACE(c->currentModule->getNamespace()->getEnvironment()->log(),
+			"compile/Condition");
+
+		// The count of all branches in the final PHI node, we add one for the default else branch
+		auto count = ast->branchCount() + 1;
+
+		std::vector<llvm::Value*> br_values(count, nullptr);
+		std::vector<llvm::BasicBlock*> br_blocks(count, nullptr);
+
+		// Get the entry and end blocks
+		auto entry_block = c->irBuilder->GetInsertBlock();
+		auto end_block = llvm::BasicBlock::Create(*c->context, "br-merge", c->codeFunction);
+
+		// construct the final else branch
+		auto else_block = llvm::BasicBlock::Create(*c->context, "br-else", c->codeFunction, end_block);
+		c->irBuilder->SetInsertPoint(else_block);
+		auto else_ast = ast->branchDefaultAst();
+		if (else_ast)
+		{
+			c->compile(else_ast);
+			br_values[0] = c->lastReturnedValue;
+		}
+		else
+		{
+			br_values[0] = c->genAsConstant(instance<>());
+		}
+		c->irBuilder->CreateBr(end_block);
+		br_blocks[0] = else_block;
+
+		// This loop goes in reverse
+		auto i_else_block = else_block;
+		for (auto ri = 0; ri < (count - 1); ++ri)
+		{
+			// actual index, goes from branchCount-1 -> 0; get the relevant branches
+			auto i = (count - 2) - ri;
+			auto i_condast = ast->branchConditionAst(i);
+			auto i_ast = ast->branchAst(i);
+
+			// get (or generate) the blocks
+			auto i_block = llvm::BasicBlock::Create(*c->context, fmt::format("br-{0}", i), c->codeFunction, i_else_block);
+			auto i_condblock = (i == 0) ? entry_block : llvm::BasicBlock::Create(*c->context, fmt::format("br-cond-{0}", i), c->codeFunction, i_block);
+
+			// generate the cond block:
+			c->irBuilder->SetInsertPoint(i_condblock);
+			c->compile(i_condast);
+			c->genTruth(c->lastReturnedValue);
+			c->irBuilder->CreateCondBr(c->lastReturnedValue, i_block, i_else_block);
+
+			// generate the code block:
+			c->irBuilder->SetInsertPoint(i_block);
+			c->compile(i_ast);
+			c->irBuilder->CreateBr(end_block);
+
+			// set the phi data
+			br_values[ri + 1] = c->lastReturnedValue;
+			br_blocks[ri + 1] = i_block;
+
+			// set the downchain invariant
+			i_else_block = i_condblock;
+		}
+
+		c->irBuilder->SetInsertPoint(end_block);
+		auto phi = c->irBuilder->CreatePHI(c->getLlvmInstanceType(types::None), count);
+		for (auto i = 0; i < count; ++i)
+		{
+			phi->addIncoming(br_values[i], br_blocks[i]);
+		}
+
+		c->lastReturnedValue = phi;
+	});
+	sem->builtin_implementMultiMethod("compile",
+		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<Loop> ast)
+	{
+		SPDLOG_TRACE(c->currentModule->getNamespace()->getEnvironment()->log(),
+			"compile/Loop");
+
+		
 	});
 
 	module->getNamespace()->refreshBackends();

@@ -153,6 +153,7 @@ namespace lisp
 		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* genPushInstance();
 		CULTLANG_BACKENDLLVM_EXPORTED void genInstanceAssign(llvm::Value* dest, llvm::Value* src);
 		CULTLANG_BACKENDLLVM_EXPORTED void genSpillInstances(std::vector<llvm::Value*> const& spill);
+		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* genTruth(llvm::Value*);
 
 		// Forwarding helpers
 	public:

@@ -17,6 +17,23 @@ CRAFT_DEFINE(LlvmBackend)
 	_.defaults();
 }
 
+instance<> LlvmBackend::_cult_runtime_subroutine_execute(instance<> subroutine, instance<>* args, size_t argc)
+{
+	if (!subroutine.hasFeature<PSubroutine>())
+	{
+		throw stdext::exception("{0} does not implement subroutine.");
+	}
+
+	auto sub = subroutine.asFeature<PSubroutine>();
+
+	return sub->execute(subroutine, {args, argc});
+}
+
+bool LlvmBackend::_cult_runtime_truth(instance<> v)
+{
+	return v;
+}
+
 std::string LlvmBackend::mangledName(instance<SBindable> bindable, std::string const& postFix)
 {
 	auto binding = bindable->getBinding();

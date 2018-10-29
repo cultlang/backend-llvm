@@ -34,8 +34,12 @@ LlvmCompiler::LlvmCompiler(instance<LlvmBackend> backend)
 	type_anyInstance = llvm::StructType::get(_backend->context, { llvm::PointerType::get(type_instanceMetaHeader, 0), type_anyPtr });
 
 	// Load symbols into:
-	backend->_internal_functions["___cult__PSubroutine__runtime_execute"] = {
-		(void*)&PSubroutine::_cult_runtime_execute,
+	backend->_internal_functions["___cult__runtime_truth"] = {
+		(void*)&LlvmBackend::_cult_runtime_truth,
+		llvm::FunctionType::get(llvm::Type::getInt1Ty(_backend->context), { type_anyInstance }, false),
+	};
+	backend->_internal_functions["___cult__runtime_subroutine_execute"] = {
+		(void*)&LlvmBackend::_cult_runtime_subroutine_execute,
 		llvm::FunctionType::get(type_anyInstance, { type_anyInstance, llvm::PointerType::get(type_anyInstance, 0), type_anyPtr }, false),
 	};
 }
@@ -69,7 +73,12 @@ LlvmCompiler::_TypeCacheEntry LlvmCompiler::_getTypeCache(types::TypeId type)
 	return entry;
 }
 
-llvm::Type* LlvmCompiler::getLlvmInstanceType(types::TypeId type) { return _getTypeCache(type).instance; }
+llvm::Type* LlvmCompiler::getLlvmInstanceType(types::TypeId type)
+{
+	if (type == types::None)
+		return type_anyInstance;
+	return _getTypeCache(type).instance;
+}
 llvm::Type* LlvmCompiler::getLlvmValueType(types::TypeId type) { return _getTypeCache(type).opaque_struct; }
 llvm::Type* LlvmCompiler::getLlvmValuePointerType(types::TypeId type) { return llvm::PointerType::get(_getTypeCache(type).opaque_struct, 0); }
 
@@ -235,7 +244,7 @@ void LlvmCompileState::pushScope(instance<lisp::SScope> scope)
 		auto fn = scope.asType<lisp::Function>();
 
 		auto count = fn->argCount();
-		for(auto i = 0; i < count; i++)
+		for (auto i = 0; i < count; i++)
 		{
 			auto bind = scope->lookupSlot(i);
 			auto arg = codeFunction->arg_begin() + _abi->getArgumentIndex(i);
@@ -269,7 +278,11 @@ llvm::Value* LlvmCompileState::getInternalFunction(std::string const& name)
 {
 	auto type = _abi->getTypeSignature(getCompiler()->getInternalFunctionType(name));
 
-	return codeModule->getOrInsertFunction(name, type, {});
+	auto res = codeModule->getOrInsertFunction(name, type, { });
+	if (auto res_func = dyn_cast<llvm::Function>(res))
+		res_func->setLinkage(llvm::Function::ExternalLinkage);
+
+	return res;
 }
 
 llvm::Constant* LlvmCompileState::genAsConstant(size_t v)
@@ -318,12 +331,12 @@ void LlvmCompileState::genReturn(llvm::Value* v)
 
 llvm::Value* LlvmCompileState::genCall(llvm::Value* calle, std::vector<llvm::Value*> const& args)
 {
-	return _abi->genCall(calle, args);
+	return lastReturnedValue = _abi->genCall(calle, args);
 }
 
 llvm::Value* LlvmCompileState::genPushInstance()
 {
-	return irBuilder->CreateAlloca(
+	return lastReturnedValue = irBuilder->CreateAlloca(
 			_compiler->type_anyInstance,
 			llvm::ConstantInt::get(llvm::Type::getInt64Ty(*context), 1)
 		);
@@ -371,6 +384,13 @@ void LlvmCompileState::genSpillInstances(std::vector<llvm::Value*> const& spill)
 
 		genInstanceAssign(dest, spill[i]);
 	}
+}
+
+llvm::Value* LlvmCompileState::genTruth(llvm::Value* v)
+{
+	auto subroutine = getInternalFunction("___cult__runtime_truth");
+
+	return lastReturnedValue = genCall(subroutine, {v});
 }
 
 /******************************************************************************
@@ -446,7 +466,9 @@ std::string LlvmAbiWindows::abiName()
 
 void LlvmAbiWindows::doFunctionPre()
 {
-	_c->codeFunction->addAttribute(1, llvm::Attribute::StructRet);
+	auto ret_arg = _c->codeFunction->arg_begin() + 0;
+	ret_arg->setName("ret");
+	ret_arg->addAttr(llvm::Attribute::StructRet);
 }
 
 size_t LlvmAbiWindows::getArgumentIndex(size_t i) const
@@ -495,9 +517,21 @@ void LlvmAbiWindows::genReturn(llvm::Value* v)
 llvm::Value* LlvmAbiWindows::genCall(llvm::Value* callee, std::vector<llvm::Value*> const& args)
 {
 	std::vector<llvm::Value*> mod_args;
+	llvm::Value* return_value = nullptr;
 
-	auto return_value = _c->genPushInstance();
-	mod_args.push_back(return_value);
+	auto func = dyn_cast<llvm::Function>(callee);
+	if (func == nullptr)
+		throw stdext::exception("Windows ABI genCall callee's must be functions at the moment.");
+
+	// Check how we are returning from this
+	auto func_type = func->getFunctionType();
+	llvm::Type* return_ty = func_type->getReturnType();
+	if (!return_ty->isVoidTy() &&
+		_c->dataLayout->getTypeAllocSize(return_ty) > 8)
+	{
+		return_value = _c->genPushInstance();
+		mod_args.push_back(return_value);
+	}
 
 	for (auto i = 0; i < args.size(); ++i)
 	{
@@ -516,6 +550,8 @@ llvm::Value* LlvmAbiWindows::genCall(llvm::Value* callee, std::vector<llvm::Valu
 		}
 	}
 
-	_c->irBuilder->CreateCall(callee, mod_args);
+	auto call_value = _c->irBuilder->CreateCall(callee, mod_args);
+	if (return_value == nullptr)
+		return_value = call_value;
 	return return_value;
 }

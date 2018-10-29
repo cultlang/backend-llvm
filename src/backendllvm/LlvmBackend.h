@@ -66,6 +66,12 @@ namespace lisp
 
 		std::map<std::string, _InternalFunctionEntry> _internal_functions;
 
+	private:		
+		// llvm-internal: ___cult__runtime_subroutine_execute
+		static CULTLANG_BACKENDLLVM_EXPORTED instance<> _cult_runtime_subroutine_execute(instance<> subroutine, instance<>* args, size_t argc);		
+		// llvm-internal: ___cult__runtime_truth
+		static CULTLANG_BACKENDLLVM_EXPORTED bool _cult_runtime_truth(instance<> v);
+
 	public:
 		using JitModule = decltype(_compileLayer)::ModuleHandleT;
 
