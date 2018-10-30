@@ -1,0 +1,14 @@
+(require "file:dlls.cult")
+(require "builtin:cult/llvm")
+
+(define loop (function ()
+    (define test (variable 10))
+    (while (!= test 0)
+        (do
+            (print test)
+            (set test (- test 1))    
+        )
+    )
+))
+
+(llvm-ir loop)

@@ -524,10 +524,9 @@ llvm::Value* LlvmAbiWindows::genCall(llvm::Value* callee, std::vector<llvm::Valu
 		throw stdext::exception("Windows ABI genCall callee's must be functions at the moment.");
 
 	// Check how we are returning from this
-	auto func_type = func->getFunctionType();
-	llvm::Type* return_ty = func_type->getReturnType();
-	if (!return_ty->isVoidTy() &&
-		_c->dataLayout->getTypeAllocSize(return_ty) > 8)
+	if (func->arg_size() > 0
+		/*&& func->hasAttribute(1, llvm::Attribute::StructRet)*/ // TODO set this more reliably
+		&& func->getReturnType()->isVoidTy())
 	{
 		return_value = _c->genPushInstance();
 		mod_args.push_back(return_value);

@@ -31,6 +31,8 @@ instance<> LlvmBackend::_cult_runtime_subroutine_execute(instance<> subroutine, 
 
 bool LlvmBackend::_cult_runtime_truth(instance<> v)
 {
+	if (v.isType<bool>())
+		return *v.asType<bool>();
 	return v;
 }
 

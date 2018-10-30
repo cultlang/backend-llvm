@@ -335,7 +335,26 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 		SPDLOG_TRACE(c->currentModule->getNamespace()->getEnvironment()->log(),
 			"compile/Loop");
 
-		
+
+		auto cond_block = llvm::BasicBlock::Create(*c->context, "loop-cond", c->codeFunction);
+		auto loop_block = llvm::BasicBlock::Create(*c->context, "loop", c->codeFunction);
+		auto endloop_block = llvm::BasicBlock::Create(*c->context, "loop-end", c->codeFunction);
+
+
+		c->irBuilder->CreateBr(cond_block);
+		c->irBuilder->SetInsertPoint(cond_block);
+
+		// Compile and Store call to condition
+		c->compile(ast->conditionAst());
+		c->genTruth(c->lastReturnedValue);
+		c->irBuilder->CreateCondBr(c->lastReturnedValue, loop_block, endloop_block);
+
+		// Compile loop exit
+		c->irBuilder->SetInsertPoint(loop_block);
+		c->compile(ast->bodyAst());
+		c->irBuilder->CreateBr(cond_block);
+	
+		c->irBuilder->SetInsertPoint(endloop_block);
 	});
 
 	module->getNamespace()->refreshBackends();
