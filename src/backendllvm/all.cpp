@@ -332,25 +332,35 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 			"compile/Loop");
 
 
+		auto entry_block =  c->irBuilder->GetInsertBlock();
+
 		auto cond_block = llvm::BasicBlock::Create(*c->context, "loop-cond", c->codeFunction);
 		auto loop_block = llvm::BasicBlock::Create(*c->context, "loop", c->codeFunction);
 		auto endloop_block = llvm::BasicBlock::Create(*c->context, "loop-end", c->codeFunction);
 
-
 		c->irBuilder->CreateBr(cond_block);
-		c->irBuilder->SetInsertPoint(cond_block);
-
-		// Compile and Store call to condition
-		c->compile(ast->conditionAst());
-		c->genTruth(c->lastReturnedValue);
-		c->irBuilder->CreateCondBr(c->lastReturnedValue, loop_block, endloop_block);
-
+		
 		// Compile loop exit
 		c->irBuilder->SetInsertPoint(loop_block);
 		c->compile(ast->bodyAst());
+		c->lastReturnedValue = c->irBuilder->CreateLoad(c->lastReturnedValue);
 		c->irBuilder->CreateBr(cond_block);
 	
+
+		// Compile and Store call to condition
+		c->irBuilder->SetInsertPoint(cond_block);
+		auto phi = c->irBuilder->CreatePHI(c->getLlvmInstanceType(types::None), 2, "loop-lastval");
+		phi->addIncoming(c->genAsConstant(instance<>()), entry_block);
+		phi->addIncoming(c->lastReturnedValue, loop_block);
+		
+		c->compile(ast->conditionAst());
+		auto branch = c->genTruth(c->lastReturnedValue);
+		c->irBuilder->CreateCondBr(branch, loop_block, endloop_block);
+
+
 		c->irBuilder->SetInsertPoint(endloop_block);
+		c->lastReturnedValue = phi;
+		
 	});
 
 	module->getNamespace()->refreshBackends();
