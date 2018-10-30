@@ -19,6 +19,9 @@ CRAFT_DEFINE(LlvmBackend)
 
 instance<> LlvmBackend::_cult_runtime_subroutine_execute(instance<> subroutine, instance<>* args, size_t argc)
 {
+	// Because this method decrefs one more than it does incref for the subroutine:
+	subroutine.incref();
+
 	if (!subroutine.hasFeature<PSubroutine>())
 	{
 		throw stdext::exception("{0} does not implement subroutine.");
@@ -31,6 +34,9 @@ instance<> LlvmBackend::_cult_runtime_subroutine_execute(instance<> subroutine, 
 
 bool LlvmBackend::_cult_runtime_truth(instance<> v)
 {
+	// Because this method decrefs one more than it does incref for the subroutine:
+	v.incref();
+
 	if (v.isType<bool>())
 		return *v.asType<bool>();
 	return v;

@@ -208,19 +208,13 @@ void LlvmCompileState::setFunction(instance<lisp::Function> func)
 	currentFunction = func;
 	auto name = LlvmBackend::mangledName(func, _abi->abiName());
 
-	codeFunction = llvm::Function::Create(
-		getLlvmType(func->subroutine_signature()),
-		llvm::Function::ExternalLinkage,
-		name,
-		codeModule);
+	codeFunction = _abi->getOrMakeFunction(codeModule, name, _compiler->getLlvmType(func->subroutine_signature()), false);
 
 	if (irBuilder != nullptr) delete irBuilder;
 	irBuilder = new llvm::IRBuilder<>(*context);
 
 	auto block = llvm::BasicBlock::Create(*context, name, codeFunction);
 	irBuilder->SetInsertPoint(block);
-
-	_abi->doFunctionPre(codeFunction);
 }
 
 void LlvmCompileState::pushScope(instance<lisp::SScope> scope)
@@ -255,7 +249,7 @@ void LlvmCompileState::pushScope(instance<lisp::SScope> scope)
 		for (auto i = 0; i < count; i++)
 		{
 			auto bind = scope->lookupSlot(i);
-			auto arg = codeFunction->arg_begin() + _abi->getArgumentIndex(i);
+			auto arg = codeFunction->arg_begin() + _abi->transmuteArgumentIndex(i);
 			arg->setName(bind->getSymbol()->getDisplay());
 			scopeStack.back().values[bind] = arg;
 		}
@@ -284,14 +278,7 @@ llvm::Value* LlvmCompileState::getScopeValue(instance<lisp::Binding> bind)
 
 llvm::Value* LlvmCompileState::getInternalFunction(std::string const& name)
 {
-	auto type = _abi->getTypeSignature(getCompiler()->getInternalFunctionType(name));
-
-	auto res = codeModule->getOrInsertFunction(name, type, { });
-	if (auto res_func = dyn_cast<llvm::Function>(res))
-	{
-		res_func->setLinkage(llvm::Function::ExternalLinkage);
-		_abi->doFunctionPre(res_func);
-	}
+	auto res = _abi->getOrMakeFunction(codeModule, name, getCompiler()->getInternalFunctionType(name), true);
 
 	return res;
 }
@@ -299,15 +286,7 @@ llvm::Value* LlvmCompileState::getGenericFunction(instance<lisp::LlvmSubroutine>
 {
 	sub->specialize();
 
-	auto name = sub->getName();
-	auto type = _abi->getTypeSignature(sub->getLlvmType());
-
-	auto res = codeModule->getOrInsertFunction(name, type, {});
-	if (auto res_func = dyn_cast<llvm::Function>(res))
-	{
-		res_func->setLinkage(llvm::Function::ExternalLinkage);
-		_abi->doFunctionPre(res_func);
-	}
+	auto res = _abi->getOrMakeFunction(codeModule, sub->getName(), sub->getLlvmType(), true);
 
 	return res;
 }
@@ -441,20 +420,25 @@ std::string LlvmAbiBase::abiName()
 	return "";
 }
 
-void LlvmAbiBase::doFunctionPre(llvm::Function*)
+llvm::Function* LlvmAbiBase::getOrMakeFunction(llvm::Module* module, std::string const& name, llvm::FunctionType* fn_type, bool declare) const
 {
+	auto func = module->getFunction(name);
+	if (func != nullptr)
+	{
+		return func;
+	}
 
+	func = llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage, name, module);
+
+	return func;
 }
-void LlvmAbiBase::doFunctionPost(llvm::Function*)
-{
 
-}
-
-size_t LlvmAbiBase::getArgumentIndex(size_t i) const
+size_t LlvmAbiBase::transmuteArgumentIndex(size_t i) const
 {
 	return i;
 }
-llvm::FunctionType* LlvmAbiBase::getTypeSignature(llvm::FunctionType* fnty) const
+
+llvm::FunctionType* LlvmAbiBase::transmuteSignature(llvm::FunctionType* fnty) const
 {
 	return fnty;
 }
@@ -486,31 +470,51 @@ LlvmAbiWindows::LlvmAbiWindows(instance<LlvmCompileState> compileState)
 
 }
 
+bool LlvmAbiWindows::requiresStructReturn(llvm::FunctionType* fnty) const
+{
+	llvm::Type* _return = fnty->getReturnType();
+
+	return !_return->isVoidTy() &&
+		_c->dataLayout->getTypeAllocSize(_return) > 8;
+}
+
 std::string LlvmAbiWindows::abiName()
 {
 	return "windows";
 }
 
-void LlvmAbiWindows::doFunctionPre(llvm::Function* fn)
+llvm::Function* LlvmAbiWindows::getOrMakeFunction(llvm::Module* module, std::string const& name, llvm::FunctionType* fn_type, bool declare) const
 {
-	auto ret_arg = fn->arg_begin() + 0;
-	ret_arg->setName("ret");
-	ret_arg->addAttr(llvm::Attribute::StructRet);
+	auto func = module->getFunction(name);
+	if (func != nullptr)
+	{
+		return func;
+	}
+
+	func = llvm::Function::Create(transmuteSignature(fn_type), llvm::Function::ExternalLinkage, name, module);
+	if (requiresStructReturn(fn_type))
+	{
+		auto ret_arg = (func->arg_begin() + 0);
+		ret_arg->setName("ret");
+		ret_arg->addAttr(llvm::Attribute::StructRet);
+	}
+
+	return func;
 }
 
-size_t LlvmAbiWindows::getArgumentIndex(size_t i) const
+size_t LlvmAbiWindows::transmuteArgumentIndex(size_t i) const
 {
 	return i + 1;
 }
-llvm::FunctionType* LlvmAbiWindows::getTypeSignature(llvm::FunctionType* fnty) const
+
+llvm::FunctionType* LlvmAbiWindows::transmuteSignature(llvm::FunctionType* fnty) const
 {
 	auto& context = _c->getCompiler()->getBackend()->context;
 
 	std::vector<llvm::Type*> args;
 	llvm::Type* _return = fnty->getReturnType();
 
-	if (!_return->isVoidTy() &&
-		_c->dataLayout->getTypeAllocSize(_return) > 8)
+	if (requiresStructReturn(fnty))
 	{
 		args.push_back(llvm::PointerType::get(_return, 0));
 		_return = llvm::Type::getVoidTy(context);

@@ -17,11 +17,10 @@ namespace lisp
 	public:
 		CULTLANG_BACKENDLLVM_EXPORTED virtual std::string abiName() = 0;
 
-		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPre(llvm::Function*) = 0;
-		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPost(llvm::Function*) = 0;
+		CULTLANG_BACKENDLLVM_EXPORTED virtual llvm::Function* getOrMakeFunction(llvm::Module* module, std::string const& name, llvm::FunctionType* fn_type, bool declare) const = 0;
 
-		CULTLANG_BACKENDLLVM_EXPORTED virtual size_t getArgumentIndex(size_t) const = 0;
-		CULTLANG_BACKENDLLVM_EXPORTED virtual llvm::FunctionType* getTypeSignature(llvm::FunctionType*) const = 0;
+		CULTLANG_BACKENDLLVM_EXPORTED virtual size_t transmuteArgumentIndex(size_t) const = 0;
+		CULTLANG_BACKENDLLVM_EXPORTED virtual llvm::FunctionType* transmuteSignature(llvm::FunctionType*) const = 0;
 
 		CULTLANG_BACKENDLLVM_EXPORTED virtual void genReturn(llvm::Value*) = 0;
 		CULTLANG_BACKENDLLVM_EXPORTED virtual llvm::Value* genCall(llvm::Value*, std::vector<llvm::Value*> const& args) = 0;
@@ -164,7 +163,7 @@ namespace lisp
 		inline llvm::Type* getLlvmType(types::IExpression* node) const { return getCompiler()->getLlvmType(node); }
 		inline llvm::FunctionType* getLlvmType(types::ExpressionStore signature) const
 		{
-			return _abi->getTypeSignature(getCompiler()->getLlvmType(signature));
+			return _abi->transmuteSignature(getCompiler()->getLlvmType(signature));
 		}
 
 	};
@@ -189,11 +188,10 @@ namespace lisp
 	public:
 		CULTLANG_BACKENDLLVM_EXPORTED virtual std::string abiName() override;
 
-		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPre(llvm::Function*) override;
-		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPost(llvm::Function*) override;
+		CULTLANG_BACKENDLLVM_EXPORTED virtual llvm::Function* getOrMakeFunction(llvm::Module* module, std::string const& name, llvm::FunctionType* fn_type, bool declare) const override;
 
-		CULTLANG_BACKENDLLVM_EXPORTED virtual size_t getArgumentIndex(size_t) const override;
-		CULTLANG_BACKENDLLVM_EXPORTED virtual llvm::FunctionType* getTypeSignature(llvm::FunctionType*) const override;
+		CULTLANG_BACKENDLLVM_EXPORTED virtual size_t transmuteArgumentIndex(size_t) const override;
+		CULTLANG_BACKENDLLVM_EXPORTED virtual llvm::FunctionType* transmuteSignature(llvm::FunctionType*) const override;
 
 		CULTLANG_BACKENDLLVM_EXPORTED virtual void genReturn(llvm::Value*) override;
 		CULTLANG_BACKENDLLVM_EXPORTED virtual llvm::Value* genCall(llvm::Value*, std::vector<llvm::Value*> const& args) override;
@@ -213,12 +211,14 @@ namespace lisp
 		CULTLANG_BACKENDLLVM_EXPORTED LlvmAbiWindows(instance<LlvmCompileState> compileState);
 
 	public:
+		CULTLANG_BACKENDLLVM_EXPORTED bool requiresStructReturn(llvm::FunctionType*) const;
+
 		CULTLANG_BACKENDLLVM_EXPORTED virtual std::string abiName() override;
 
-		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPre(llvm::Function*) override;
+		CULTLANG_BACKENDLLVM_EXPORTED virtual llvm::Function* getOrMakeFunction(llvm::Module* module, std::string const& name, llvm::FunctionType* fn_type, bool declare) const override;
 
-		CULTLANG_BACKENDLLVM_EXPORTED virtual size_t getArgumentIndex(size_t) const override;
-		CULTLANG_BACKENDLLVM_EXPORTED virtual llvm::FunctionType* getTypeSignature(llvm::FunctionType*) const override;
+		CULTLANG_BACKENDLLVM_EXPORTED virtual size_t transmuteArgumentIndex(size_t) const override;
+		CULTLANG_BACKENDLLVM_EXPORTED virtual llvm::FunctionType* transmuteSignature(llvm::FunctionType*) const override;
 
 		CULTLANG_BACKENDLLVM_EXPORTED virtual void genReturn(llvm::Value*) override;
 		CULTLANG_BACKENDLLVM_EXPORTED virtual llvm::Value* genCall(llvm::Value*, std::vector<llvm::Value*> const& args) override;
