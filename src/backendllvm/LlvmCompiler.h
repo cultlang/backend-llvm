@@ -17,8 +17,8 @@ namespace lisp
 	public:
 		CULTLANG_BACKENDLLVM_EXPORTED virtual std::string abiName() = 0;
 
-		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPre() = 0;
-		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPost() = 0;
+		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPre(llvm::Function*) = 0;
+		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPost(llvm::Function*) = 0;
 
 		CULTLANG_BACKENDLLVM_EXPORTED virtual size_t getArgumentIndex(size_t) const = 0;
 		CULTLANG_BACKENDLLVM_EXPORTED virtual llvm::FunctionType* getTypeSignature(llvm::FunctionType*) const = 0;
@@ -188,8 +188,8 @@ namespace lisp
 	public:
 		CULTLANG_BACKENDLLVM_EXPORTED virtual std::string abiName() override;
 
-		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPre() override;
-		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPost() override;
+		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPre(llvm::Function*) override;
+		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPost(llvm::Function*) override;
 
 		CULTLANG_BACKENDLLVM_EXPORTED virtual size_t getArgumentIndex(size_t) const override;
 		CULTLANG_BACKENDLLVM_EXPORTED virtual llvm::FunctionType* getTypeSignature(llvm::FunctionType*) const override;
@@ -214,7 +214,7 @@ namespace lisp
 	public:
 		CULTLANG_BACKENDLLVM_EXPORTED virtual std::string abiName() override;
 
-		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPre() override;
+		CULTLANG_BACKENDLLVM_EXPORTED virtual void doFunctionPre(llvm::Function*) override;
 
 		CULTLANG_BACKENDLLVM_EXPORTED virtual size_t getArgumentIndex(size_t) const override;
 		CULTLANG_BACKENDLLVM_EXPORTED virtual llvm::FunctionType* getTypeSignature(llvm::FunctionType*) const override;

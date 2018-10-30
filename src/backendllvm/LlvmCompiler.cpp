@@ -40,7 +40,7 @@ LlvmCompiler::LlvmCompiler(instance<LlvmBackend> backend)
 	};
 	backend->_internal_functions["___cult__runtime_subroutine_execute"] = {
 		(void*)&LlvmBackend::_cult_runtime_subroutine_execute,
-		llvm::FunctionType::get(type_anyInstance, { type_anyInstance, llvm::PointerType::get(type_anyInstance, 0), type_anyPtr }, false),
+		llvm::FunctionType::get(type_anyInstance, { type_anyInstance, llvm::PointerType::get(type_anyInstance, 0), llvm::Type::getInt64Ty(_backend->context) }, false),
 	};
 }
 
@@ -212,7 +212,7 @@ void LlvmCompileState::setFunction(instance<lisp::Function> func)
 	auto block = llvm::BasicBlock::Create(*context, name, codeFunction);
 	irBuilder->SetInsertPoint(block);
 
-	_abi->doFunctionPre();
+	_abi->doFunctionPre(codeFunction);
 }
 
 void LlvmCompileState::pushScope(instance<lisp::SScope> scope)
@@ -280,7 +280,10 @@ llvm::Value* LlvmCompileState::getInternalFunction(std::string const& name)
 
 	auto res = codeModule->getOrInsertFunction(name, type, { });
 	if (auto res_func = dyn_cast<llvm::Function>(res))
+	{
 		res_func->setLinkage(llvm::Function::ExternalLinkage);
+		_abi->doFunctionPre(res_func);
+	}
 
 	return res;
 }
@@ -414,11 +417,11 @@ std::string LlvmAbiBase::abiName()
 	return "";
 }
 
-void LlvmAbiBase::doFunctionPre()
+void LlvmAbiBase::doFunctionPre(llvm::Function*)
 {
 
 }
-void LlvmAbiBase::doFunctionPost()
+void LlvmAbiBase::doFunctionPost(llvm::Function*)
 {
 
 }
@@ -464,9 +467,9 @@ std::string LlvmAbiWindows::abiName()
 	return "windows";
 }
 
-void LlvmAbiWindows::doFunctionPre()
+void LlvmAbiWindows::doFunctionPre(llvm::Function* fn)
 {
-	auto ret_arg = _c->codeFunction->arg_begin() + 0;
+	auto ret_arg = fn->arg_begin() + 0;
 	ret_arg->setName("ret");
 	ret_arg->addAttr(llvm::Attribute::StructRet);
 }
@@ -525,8 +528,7 @@ llvm::Value* LlvmAbiWindows::genCall(llvm::Value* callee, std::vector<llvm::Valu
 
 	// Check how we are returning from this
 	if (func->arg_size() > 0
-		/*&& func->hasAttribute(1, llvm::Attribute::StructRet)*/ // TODO set this more reliably
-		&& func->getReturnType()->isVoidTy())
+		&& func->hasAttribute(1, llvm::Attribute::StructRet))
 	{
 		return_value = _c->genPushInstance();
 		mod_args.push_back(return_value);
