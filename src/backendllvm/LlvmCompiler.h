@@ -126,8 +126,8 @@ namespace lisp
 
 		CULTLANG_BACKENDLLVM_EXPORTED instance<LlvmCompiler> getCompiler() const;
 
-		CULTLANG_BACKENDLLVM_EXPORTED void setAbi(instance<>);
-		CULTLANG_BACKENDLLVM_EXPORTED instance<> getAbi();
+		CULTLANG_BACKENDLLVM_EXPORTED void setAbi(instance<SLlvmAbi>);
+		CULTLANG_BACKENDLLVM_EXPORTED instance<SLlvmAbi> getAbi();
 
 	public:
 		CULTLANG_BACKENDLLVM_EXPORTED void compile(instance<lisp::SCultSemanticNode> node);
@@ -144,6 +144,7 @@ namespace lisp
 		// compile helpers
 	public:
 		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* getInternalFunction(std::string const& name);
+		CULTLANG_BACKENDLLVM_EXPORTED llvm::Value* getGenericFunction(instance<lisp::LlvmSubroutine> sub);
 
 		CULTLANG_BACKENDLLVM_EXPORTED llvm::Constant* genAsConstant(size_t);
 		CULTLANG_BACKENDLLVM_EXPORTED llvm::Constant* genAsConstant(instance<> inst);

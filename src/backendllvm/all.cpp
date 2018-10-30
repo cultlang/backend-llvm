@@ -226,11 +226,7 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 			{
 				auto sub = res.asType<LlvmSubroutine>();
 
-				sub->specialize();
-
-				auto callee = c->codeModule->getOrInsertFunction(sub->getName(), sub->getLlvmType(), {});
-
-				c->lastReturnedValue = c->genCall(callee, args);
+				c->lastReturnedValue = c->genCall(c->getGenericFunction(sub), args);
 				return;
 			}
 			else throw stdext::exception("`{0}` is not a callable object.", res);

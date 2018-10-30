@@ -165,6 +165,14 @@ instance<LlvmCompiler> LlvmCompileState::getCompiler() const
 {
 	return _compiler;
 }
+void LlvmCompileState::setAbi(instance<SLlvmAbi>)
+{
+
+}
+instance<SLlvmAbi> LlvmCompileState::getAbi()
+{
+	return _abi;
+}
 
 void LlvmCompileState::compile(instance<lisp::SCultSemanticNode> node)
 {
@@ -279,6 +287,22 @@ llvm::Value* LlvmCompileState::getInternalFunction(std::string const& name)
 	auto type = _abi->getTypeSignature(getCompiler()->getInternalFunctionType(name));
 
 	auto res = codeModule->getOrInsertFunction(name, type, { });
+	if (auto res_func = dyn_cast<llvm::Function>(res))
+	{
+		res_func->setLinkage(llvm::Function::ExternalLinkage);
+		_abi->doFunctionPre(res_func);
+	}
+
+	return res;
+}
+llvm::Value* LlvmCompileState::getGenericFunction(instance<lisp::LlvmSubroutine> sub)
+{
+	sub->specialize();
+
+	auto name = sub->getName();
+	auto type = _abi->getTypeSignature(sub->getLlvmType());
+
+	auto res = codeModule->getOrInsertFunction(name, type, {});
 	if (auto res_func = dyn_cast<llvm::Function>(res))
 	{
 		res_func->setLinkage(llvm::Function::ExternalLinkage);

@@ -2,7 +2,7 @@
 (require "builtin:cult/llvm")
 
 (define dontadd (function (a b)
-    a
+    (+ a b)
 ))
 
 (define calling (function (f g)
