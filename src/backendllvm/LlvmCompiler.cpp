@@ -369,7 +369,6 @@ void LlvmCompileState::genInstanceAssign(llvm::Value* dest, llvm::Value* src)
 			irBuilder->CreatePointerCast(dest, _compiler->type_anyPtr),
 			irBuilder->CreatePointerCast(src, _compiler->type_anyPtr),
 			llvm::ConstantInt::get(*context, llvm::APInt(64, inst_size)),
-			llvm::ConstantInt::get(*context, llvm::APInt(32, 0)), // Remove in llvm:v7
 			llvm::ConstantInt::get(*context, llvm::APInt(1, false))
 		});
 	}

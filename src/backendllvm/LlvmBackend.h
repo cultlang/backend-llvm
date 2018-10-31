@@ -37,12 +37,13 @@ namespace lisp
 		friend class LlvmModule;
 		friend class LlvmSubroutine;
 
+		llvm::orc::ExecutionSession _es;
 		std::unique_ptr<llvm::TargetMachine> _tm;
+		std::shared_ptr<llvm::orc::SymbolResolver> _resolver;
 		const llvm::DataLayout _dl;
 		llvm::orc::RTDyldObjectLinkingLayer _objectLayer;
 		llvm::orc::IRCompileLayer<decltype(_objectLayer), llvm::orc::SimpleCompiler> _compileLayer;
 
-		std::shared_ptr<llvm::JITSymbolResolver> _resolver;
 
 		instance<Namespace> _ns;
 		instance<LlvmCompiler> _compiler;
@@ -73,7 +74,7 @@ namespace lisp
 		static CULTLANG_BACKENDLLVM_EXPORTED bool _cult_runtime_truth(instance<> v);
 
 	public:
-		using JitModule = decltype(_compileLayer)::ModuleHandleT;
+		using JitModule = llvm::orc::VModuleKey;
 
 		CULTLANG_BACKENDLLVM_EXPORTED static std::string mangledName(instance<SBindable>, std::string const& postFix = "");
 
@@ -86,7 +87,7 @@ namespace lisp
 		CULTLANG_BACKENDLLVM_EXPORTED instance<Namespace> getNamespace() const;
 
 	public:
-		CULTLANG_BACKENDLLVM_EXPORTED void addModule(instance<LlvmModule> module);
+		CULTLANG_BACKENDLLVM_EXPORTED LlvmBackend::JitModule addModule(std::unique_ptr<llvm::Module> module);
 
 		CULTLANG_BACKENDLLVM_EXPORTED void addJit(instance<LlvmSubroutine> subroutine);
 		CULTLANG_BACKENDLLVM_EXPORTED void removeJit(instance<LlvmSubroutine> subroutine);

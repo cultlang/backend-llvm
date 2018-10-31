@@ -15,6 +15,7 @@ dll_generator(
     "lisp",
   ],
   deps = [
+    "@llvm//:LLVMAggressiveInstCombine",
     "@llvm//:LLVMAnalysis",
     "@llvm//:LLVMAsmParser",
     "@llvm//:LLVMAsmPrinter",

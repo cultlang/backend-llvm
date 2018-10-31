@@ -54,7 +54,7 @@ LlvmBackend::JitModule LlvmSubroutine::specialize(std::vector<TypeId>* types)
 	if (!verify_str.empty())
 		backend->getNamespace()->getEnvironment()->log()->info(verify_str);
 
-	auto ir = std::make_shared<llvm::Module>(_module->getModule()->uri(), backend->context);
+	auto ir = std::make_unique<llvm::Module>(_module->getModule()->uri(), backend->context);
 	ir->setDataLayout(backend->_dl);
 	ir->setTargetTriple(llvm::sys::getDefaultTargetTriple());
 
@@ -82,7 +82,7 @@ LlvmBackend::JitModule LlvmSubroutine::specialize(std::vector<TypeId>* types)
 
 	ir->print(llvm::errs(), nullptr);
 
-	_jit_handle_generic = cantFail(backend->_compileLayer.addModule(ir, backend->_resolver));
+	_jit_handle_generic = backend->addModule(std::move(ir));
 	_jitted = true;
 
 	return _jit_handle_generic;
@@ -94,8 +94,8 @@ instance<> LlvmSubroutine::invoke(GenericInvoke const& invk)
 	auto name = getName();
 
 	specialize();
-
-	auto res = cantFail(_jit_handle_generic->get()->getSymbol(name, false).getAddress());
+	auto backend = _module->getBackend();
+	auto res = backend->getSymbolAddress(name);
 
 	if (res == 0)
 		return instance<>();

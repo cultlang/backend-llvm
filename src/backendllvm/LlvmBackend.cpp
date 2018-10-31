@@ -57,11 +57,28 @@ std::string LlvmBackend::mangledName(instance<SBindable> bindable, std::string c
 
 LlvmBackend::LlvmBackend(instance<Namespace> lisp)
 	: context()
+	, _resolver(createLegacyLookupResolver(
+		_es,
+		[this](const std::string &Name) -> JITSymbol {
+			if (auto Sym = _compileLayer.findSymbol(Name, false))
+			return Sym;
+			else if (auto Err = Sym.takeError())
+			return std::move(Err);
+			if (auto SymAddr =
+					RTDyldMemoryManager::getSymbolAddressInProcess(Name))
+			return JITSymbol(SymAddr, JITSymbolFlags::Exported);
+			return nullptr;
+		},
+		[](Error Err) { cantFail(std::move(Err), "lookupFlags failed"); })
+	)
 	, _tm(EngineBuilder().selectTarget()) // from current process
 	, _dl(_tm->createDataLayout())
-	, _objectLayer([]() {
-		return std::make_shared<SectionMemoryManager>();
-	}) // lambda to make memory sections
+	, _objectLayer(_es,
+		[this](VModuleKey) {
+			return RTDyldObjectLinkingLayer::Resources{
+				std::make_shared<SectionMemoryManager>(), _resolver
+			};
+	})
 	, _compileLayer(_objectLayer, SimpleCompiler(*_tm))
 	, _ns(lisp)
 {
@@ -71,24 +88,6 @@ LlvmBackend::LlvmBackend(instance<Namespace> lisp)
 	_objectLayer.setProcessAllSections(true);
 
 	llvm::sys::DynamicLibrary::LoadLibraryPermanently(nullptr); // load the current process
-
-	// Build our symbol resolver:
-	// Lambda 1: Look back into the JIT itself to find symbols that are part of the same "logical dylib".
-	// Lambda 2: Search for external symbols in the host process.
-	_resolver = createLambdaResolver(
-		[&](std::string const& name) {
-		if (auto sym = _compileLayer.findSymbol(name, false))
-			return sym;
-		return JITSymbol(nullptr);
-	},
-		[&](std::string const& name) {
-		auto internal_it = _internal_functions.find(name);
-		if (internal_it != _internal_functions.end())
-			return JITSymbol((uintptr_t)internal_it->second.funcptr, JITSymbolFlags::Exported);
-		if (auto sym_addr = RTDyldMemoryManager::getSymbolAddressInProcess(name))
-			return JITSymbol(sym_addr, JITSymbolFlags::Exported);
-		return JITSymbol(nullptr);
-	});
 }
 
 void LlvmBackend::craft_setupInstance()
@@ -106,9 +105,11 @@ instance<Namespace> LlvmBackend::getNamespace() const
 	return _ns;
 }
 
-void LlvmBackend::addModule(instance<LlvmModule> module)
+LlvmBackend::JitModule LlvmBackend::addModule(std::unique_ptr<llvm::Module> module)
 {
-
+	auto K = _es.allocateVModule();
+    cantFail(_compileLayer.addModule(K, std::move(module)));
+    return K;
 }
 
 void LlvmBackend::addJit(instance<LlvmSubroutine> subroutine)
