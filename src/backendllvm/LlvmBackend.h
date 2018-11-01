@@ -38,8 +38,10 @@ namespace lisp
 		friend class LlvmSubroutine;
 
 		llvm::orc::ExecutionSession _es;
-		std::unique_ptr<llvm::TargetMachine> _tm;
 		std::shared_ptr<llvm::orc::SymbolResolver> _resolver;
+		
+		std::unique_ptr<llvm::TargetMachine> _tm;
+		
 		const llvm::DataLayout _dl;
 		llvm::orc::RTDyldObjectLinkingLayer _objectLayer;
 		llvm::orc::IRCompileLayer<decltype(_objectLayer), llvm::orc::SimpleCompiler> _compileLayer;

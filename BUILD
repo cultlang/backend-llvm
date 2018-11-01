@@ -62,7 +62,7 @@ dll_generator(
     "@llvm//:LLVMSymbolize",
     "@llvm//:LLVMTableGen",
     "@llvm//:LLVMTarget",
-    "@llvm//:LLVMTestingSupport",
+    #"@llvm//:LLVMTestingSupport",
     "@llvm//:LLVMTransformUtils",
     "@llvm//:LLVMVectorize",
     "@llvm//:LLVMX86AsmParser",

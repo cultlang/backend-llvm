@@ -98,7 +98,12 @@ instance<> LlvmSubroutine::invoke(GenericInvoke const& invk)
 	auto res = backend->getSymbolAddress(name);
 
 	if (res == 0)
+	{
+		SPDLOG_TRACE(_module->getModule()->getNamespace()->getEnvironment()->log(),
+			"LlvmSubroutine::invoke: null getSymbolAddress");
 		return instance<>();
+	}
+		
 	return types::invoke(function->subroutine_signature(), types::Function(res), invk);
 }
 

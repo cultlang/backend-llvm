@@ -57,19 +57,24 @@ std::string LlvmBackend::mangledName(instance<SBindable> bindable, std::string c
 
 LlvmBackend::LlvmBackend(instance<Namespace> lisp)
 	: context()
+	, _es()
 	, _resolver(createLegacyLookupResolver(
 		_es,
 		[this](const std::string &Name) -> JITSymbol {
-			if (auto Sym = _compileLayer.findSymbol(Name, false))
-			return Sym;
+			auto internal_it = _internal_functions.find(Name);
+			if (internal_it != _internal_functions.end())
+				return JITSymbol((uintptr_t)internal_it->second.funcptr, JITSymbolFlags::Exported);
+			else if (auto Sym = _compileLayer.findSymbol(Name, false))
+				return Sym;
 			else if (auto Err = Sym.takeError())
-			return std::move(Err);
-			if (auto SymAddr =
-					RTDyldMemoryManager::getSymbolAddressInProcess(Name))
-			return JITSymbol(SymAddr, JITSymbolFlags::Exported);
+				return std::move(Err);
+			if (auto SymAddr = RTDyldMemoryManager::getSymbolAddressInProcess(Name))
+				return JITSymbol(SymAddr, JITSymbolFlags::Exported);
 			return nullptr;
 		},
-		[](Error Err) { cantFail(std::move(Err), "lookupFlags failed"); })
+		[](Error Err) { 
+			cantFail(std::move(Err), "lookupFlags failed"); 
+		})
 	)
 	, _tm(EngineBuilder().selectTarget()) // from current process
 	, _dl(_tm->createDataLayout())
@@ -109,6 +114,7 @@ LlvmBackend::JitModule LlvmBackend::addModule(std::unique_ptr<llvm::Module> modu
 {
 	auto K = _es.allocateVModule();
     cantFail(_compileLayer.addModule(K, std::move(module)));
+	
     return K;
 }
 
@@ -135,12 +141,13 @@ JITSymbol LlvmBackend::findSymbol(std::string const& name)
 	std::string mangled_name;
 	raw_string_ostream mangled_name_stream(mangled_name);
 	Mangler::getNameWithPrefix(mangled_name_stream, name, _dl);
-	return _compileLayer.findSymbol(mangled_name_stream.str(), true);
+	return _compileLayer.findSymbol(mangled_name_stream.str(), false);
 }
 
 JITTargetAddress LlvmBackend::getSymbolAddress(std::string const& name)
 {
-	return cantFail(findSymbol(name).getAddress());
+	auto s = findSymbol(name);
+	return cantFail(s.getAddress());
 }
 
 LlvmBackendProvider::LlvmBackendProvider()
