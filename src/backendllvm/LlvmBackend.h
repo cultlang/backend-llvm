@@ -38,7 +38,7 @@ namespace lisp
 		friend class LlvmSubroutine;
 
 		llvm::orc::ExecutionSession _es;
-		std::shared_ptr<llvm::orc::SymbolResolver> _resolver;
+		std::map<llvm::orc::VModuleKey, std::shared_ptr<llvm::orc::SymbolResolver>> _resolvers;
 		
 		std::unique_ptr<llvm::TargetMachine> _tm;
 		
@@ -46,6 +46,10 @@ namespace lisp
 		llvm::orc::RTDyldObjectLinkingLayer _objectLayer;
 		llvm::orc::IRCompileLayer<decltype(_objectLayer), llvm::orc::SimpleCompiler> _compileLayer;
 
+		using OptimizeFunction = std::function<std::unique_ptr<llvm::Module>(std::unique_ptr<llvm::Module>)>;
+		llvm::orc::IRTransformLayer<decltype(_compileLayer), OptimizeFunction> _optimizeLayer;
+		std::unique_ptr<llvm::orc::JITCompileCallbackManager> _compileCallbackManager;
+  		llvm::orc::CompileOnDemandLayer<decltype(_optimizeLayer)> _cODLayer;
 
 		instance<Namespace> _ns;
 		instance<LlvmCompiler> _compiler;
@@ -90,7 +94,7 @@ namespace lisp
 
 	public:
 		CULTLANG_BACKENDLLVM_EXPORTED LlvmBackend::JitModule addModule(std::unique_ptr<llvm::Module> module);
-
+		CULTLANG_BACKENDLLVM_EXPORTED std::unique_ptr<llvm::Module> optimizeModule(std::unique_ptr<llvm::Module> M);
 		CULTLANG_BACKENDLLVM_EXPORTED void addJit(instance<LlvmSubroutine> subroutine);
 		CULTLANG_BACKENDLLVM_EXPORTED void removeJit(instance<LlvmSubroutine> subroutine);
 

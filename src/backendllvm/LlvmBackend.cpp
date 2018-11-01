@@ -1,3 +1,5 @@
+#pragma warning( push )
+#pragma warning( disable : 4244)
 #include "backendllvm/common.h"
 
 #include "llvm_internal.h"
@@ -5,24 +7,23 @@
 
 using namespace craft;
 using namespace craft::types;
-using namespace craft::lisp;
 
 using namespace llvm;
 using namespace llvm::orc;
 
-CRAFT_DEFINE(LlvmBackend)
+CRAFT_DEFINE(craft::lisp::LlvmBackend)
 {
-	_.use<PBackend>().singleton<LlvmBackendProvider>();
+	_.use<PBackend>().singleton<craft::lisp::LlvmBackendProvider>();
 
 	_.defaults();
 }
 
-instance<> LlvmBackend::_cult_runtime_subroutine_execute(instance<> subroutine, instance<>* args, size_t argc)
+instance<> craft::lisp::LlvmBackend::_cult_runtime_subroutine_execute(instance<> subroutine, instance<>* args, size_t argc)
 {
 	// Because this method decrefs one more than it does incref for the subroutine:
 	subroutine.incref();
 
-	if (!subroutine.hasFeature<PSubroutine>())
+	if (!subroutine.hasFeature<craft::lisp::PSubroutine>())
 	{
 		throw stdext::exception("{0} does not implement subroutine.");
 	}
@@ -32,7 +33,7 @@ instance<> LlvmBackend::_cult_runtime_subroutine_execute(instance<> subroutine, 
 	return sub->execute(subroutine, {args, argc});
 }
 
-bool LlvmBackend::_cult_runtime_truth(instance<> v)
+bool craft::lisp::LlvmBackend::_cult_runtime_truth(instance<> v)
 {
 	// Because this method decrefs one more than it does incref for the subroutine:
 	v.incref();
@@ -42,7 +43,7 @@ bool LlvmBackend::_cult_runtime_truth(instance<> v)
 	return v;
 }
 
-std::string LlvmBackend::mangledName(instance<SBindable> bindable, std::string const& postFix)
+std::string craft::lisp::LlvmBackend::mangledName(instance<SBindable> bindable, std::string const& postFix)
 {
 	auto binding = bindable->getBinding();
 	auto module = binding->getScope()->getSemantics()->getModule();
@@ -55,10 +56,56 @@ std::string LlvmBackend::mangledName(instance<SBindable> bindable, std::string c
 		return fmt::format("{1}@@@{0}:::{2}", module->uri(), binding->getSymbol()->getDisplay(), postFix);
 }
 
-LlvmBackend::LlvmBackend(instance<Namespace> lisp)
+craft::lisp::LlvmBackend::LlvmBackend(instance<craft::lisp::Namespace> lisp)
 	: context()
 	, _es()
-	, _resolver(createLegacyLookupResolver(
+	, _tm(EngineBuilder().selectTarget()) // from current process
+	, _dl(_tm->createDataLayout())
+	, _objectLayer(_es,
+		[this](VModuleKey k) {
+			return RTDyldObjectLinkingLayer::Resources{
+				std::make_shared<SectionMemoryManager>(), _resolvers[k]
+			};
+	})
+	, _compileLayer(_objectLayer, SimpleCompiler(*_tm))
+	, _optimizeLayer(_compileLayer, [this](std::unique_ptr<::llvm::Module> M) {return optimizeModule(std::move(M));})
+	, _compileCallbackManager(cantFail(orc::createLocalCompileCallbackManager(_tm->getTargetTriple(), _es, 0)))
+	, _cODLayer(_es, _optimizeLayer,
+		[&](orc::VModuleKey K) { return _resolvers[K]; },
+		[&](orc::VModuleKey K, std::shared_ptr<SymbolResolver> R) {_resolvers[K] = std::move(R);},
+		[](llvm::Function &F) { return std::set<llvm::Function*>({&F}); },
+		*_compileCallbackManager,
+		orc::createLocalIndirectStubsManagerBuilder(_tm->getTargetTriple())
+	)
+	, _ns(lisp)
+{
+	lisp->getEnvironment()->log()->info("LLVM Target: {0}", (std::string)_tm->getTargetTriple().str());
+	lisp->getEnvironment()->log()->info("LLVM Target Features: {0}", (std::string)_tm->getTargetFeatureString());
+
+	_objectLayer.setProcessAllSections(true);
+
+	llvm::sys::DynamicLibrary::LoadLibraryPermanently(nullptr); // load the current process
+}
+
+void craft::lisp::LlvmBackend::craft_setupInstance()
+{
+	_compiler = instance<craft::lisp::LlvmCompiler>::make(craft_instance());
+}
+
+instance<craft::lisp::LlvmCompiler> craft::lisp::LlvmBackend::getCompiler() const
+{
+	return _compiler;
+}
+
+instance<craft::lisp::Namespace> craft::lisp::LlvmBackend::getNamespace() const
+{
+	return _ns;
+}
+
+craft::lisp::LlvmBackend::JitModule craft::lisp::LlvmBackend::addModule(std::unique_ptr<llvm::Module> module)
+{
+	auto K = _es.allocateVModule();
+	_resolvers[K] = createLegacyLookupResolver(
 		_es,
 		[this](const std::string &Name) -> JITSymbol {
 			auto internal_it = _internal_functions.find(Name);
@@ -74,100 +121,82 @@ LlvmBackend::LlvmBackend(instance<Namespace> lisp)
 		},
 		[](Error Err) { 
 			cantFail(std::move(Err), "lookupFlags failed"); 
-		})
-	)
-	, _tm(EngineBuilder().selectTarget()) // from current process
-	, _dl(_tm->createDataLayout())
-	, _objectLayer(_es,
-		[this](VModuleKey) {
-			return RTDyldObjectLinkingLayer::Resources{
-				std::make_shared<SectionMemoryManager>(), _resolver
-			};
-	})
-	, _compileLayer(_objectLayer, SimpleCompiler(*_tm))
-	, _ns(lisp)
-{
-	lisp->getEnvironment()->log()->info("LLVM Target: {0}", (std::string)_tm->getTargetTriple().str());
-	lisp->getEnvironment()->log()->info("LLVM Target Features: {0}", (std::string)_tm->getTargetFeatureString());
+		}
+	);
 
-	_objectLayer.setProcessAllSections(true);
-
-	llvm::sys::DynamicLibrary::LoadLibraryPermanently(nullptr); // load the current process
-}
-
-void LlvmBackend::craft_setupInstance()
-{
-	_compiler = instance<LlvmCompiler>::make(craft_instance());
-}
-
-instance<LlvmCompiler> LlvmBackend::getCompiler() const
-{
-	return _compiler;
-}
-
-instance<Namespace> LlvmBackend::getNamespace() const
-{
-	return _ns;
-}
-
-LlvmBackend::JitModule LlvmBackend::addModule(std::unique_ptr<llvm::Module> module)
-{
-	auto K = _es.allocateVModule();
-    cantFail(_compileLayer.addModule(K, std::move(module)));
-	
+    cantFail(_cODLayer.addModule(K, std::move(module)));
     return K;
 }
 
-void LlvmBackend::addJit(instance<LlvmSubroutine> subroutine)
+std::unique_ptr<llvm::Module> craft::lisp::LlvmBackend::optimizeModule(std::unique_ptr<llvm::Module> M)
+{
+	auto FPM = llvm::make_unique<legacy::FunctionPassManager>(M.get());
+
+    // Add some optimizations.
+    FPM->add(createInstructionCombiningPass());
+    FPM->add(createReassociatePass());
+    FPM->add(createGVNPass());
+    FPM->add(createCFGSimplificationPass());
+    FPM->doInitialization();
+
+    // Run the optimizations over all functions in the module being added to
+    // the JIT.
+    for (auto &F : *M)
+      FPM->run(F);
+
+    return M;
+}
+
+void craft::lisp::LlvmBackend::addJit(instance<craft::lisp::LlvmSubroutine> subroutine)
 {
 	subroutine->generate();
 }
-void LlvmBackend::removeJit(instance<LlvmSubroutine> subroutine)
+void craft::lisp::LlvmBackend::removeJit(instance<craft::lisp::LlvmSubroutine> subroutine)
 {
 	cantFail(_compileLayer.removeModule(subroutine->_jit_handle_generic));
 }
 
-instance<> LlvmBackend::require(instance<SCultSemanticNode> node)
+instance<> craft::lisp::LlvmBackend::require(instance<craft::lisp::SCultSemanticNode> node)
 {
-	auto module = SScope::findScope(node)->getSemantics()->getModule();
+	auto module = craft::lisp::SScope::findScope(node)->getSemantics()->getModule();
 	auto llvm = module->require<LlvmModule>();
 
 	llvm->generate();
 	return llvm->require(node);
 }
 
-JITSymbol LlvmBackend::findSymbol(std::string const& name)
+JITSymbol craft::lisp::LlvmBackend::findSymbol(std::string const& name)
 {
 	std::string mangled_name;
 	raw_string_ostream mangled_name_stream(mangled_name);
 	Mangler::getNameWithPrefix(mangled_name_stream, name, _dl);
-	return _compileLayer.findSymbol(mangled_name_stream.str(), false);
+	return _cODLayer.findSymbol(mangled_name_stream.str(), false);
 }
 
-JITTargetAddress LlvmBackend::getSymbolAddress(std::string const& name)
+JITTargetAddress craft::lisp::LlvmBackend::getSymbolAddress(std::string const& name)
 {
 	auto s = findSymbol(name);
 	return cantFail(s.getAddress());
 }
 
-LlvmBackendProvider::LlvmBackendProvider()
+craft::lisp::LlvmBackendProvider::LlvmBackendProvider()
 {
 	llvm::InitializeNativeTarget();
 	llvm::InitializeNativeTargetAsmPrinter();
 	llvm::InitializeNativeTargetAsmParser();
 }
 
-instance<> LlvmBackendProvider::init(instance<Namespace> ns) const
+instance<> craft::lisp::LlvmBackendProvider::init(instance<craft::lisp::Namespace> ns) const
 {
-	return instance<LlvmBackend>::make(ns);
+	return instance<craft::lisp::LlvmBackend>::make(ns);
 }
 
-instance<> LlvmBackendProvider::makeCompilerOptions() const
+instance<> craft::lisp::LlvmBackendProvider::makeCompilerOptions() const
 {
 	return instance<>();
 }
 
-void LlvmBackendProvider::compile(instance<> backend, instance<> options, std::string const& path, instance<lisp::Module> module) const
+void craft::lisp::LlvmBackendProvider::compile(instance<> backend, instance<> options, std::string const& path, instance<lisp::Module> module) const
 {
 
 }
@@ -215,3 +244,5 @@ instance<> LlvmBackendProvider::exec(instance<lisp::SFrame> frame, instance<> co
 		return frame->getNamespace()->environment()->eval(frame, code);
 }
 */
+
+#pragma warning( pop ) 
