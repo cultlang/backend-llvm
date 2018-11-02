@@ -11,6 +11,16 @@ using namespace craft::types;
 using namespace llvm;
 using namespace llvm::orc;
 
+
+
+#ifdef _WIN32
+#define CLANG_INTERPRETER_WIN_EXCEPTIONS
+#include "WindowsMemoryManager.h"
+typedef interpreter::SingleSectionMemoryManager MemManager;
+#else
+typedef llvm::SectionMemoryManager MemManager;
+#endif
+
 CRAFT_DEFINE(craft::lisp::LlvmBackend)
 {
 	_.use<PBackend>().singleton<craft::lisp::LlvmBackendProvider>();
@@ -64,7 +74,7 @@ craft::lisp::LlvmBackend::LlvmBackend(instance<craft::lisp::Namespace> lisp)
 	, _objectLayer(_es,
 		[this](VModuleKey k) {
 			return RTDyldObjectLinkingLayer::Resources{
-				std::make_shared<SectionMemoryManager>(), _resolvers[k]
+				std::make_shared<MemManager>(), _resolvers[k]
 			};
 	})
 	, _compileLayer(_objectLayer, SimpleCompiler(*_tm))

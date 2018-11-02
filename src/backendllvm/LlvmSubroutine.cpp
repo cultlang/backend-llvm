@@ -1,3 +1,5 @@
+#pragma warning( push )
+#pragma warning( disable : 4244)
 #include "backendllvm/common.h"
 
 #include "llvm_internal.h"
@@ -140,3 +142,4 @@ std::string LlvmSubroutine::getName()
 	auto function = _ast.asFeature<Function>();
 	return LlvmBackend::mangledName(function, "windows");
 }
+#pragma warning( pop ) 

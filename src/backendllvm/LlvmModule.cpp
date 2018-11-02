@@ -1,3 +1,5 @@
+#pragma warning( push )
+#pragma warning( disable : 4244)
 #include "backendllvm/common.h"
 
 #include "llvm_internal.h"
@@ -110,3 +112,5 @@ instance<> LlvmSemanticsProvider::lookup(instance<> semantics_, instance<Symbol>
 	semantics->generate();
 	return semantics->_entries.lookup(sym)->_llvm;
 }
+
+#pragma warning( pop ) 
