@@ -66,10 +66,16 @@ std::string craft::lisp::LlvmBackend::mangledName(instance<SBindable> bindable, 
 		return fmt::format("{1}@@@{0}:::{2}", module->uri(), binding->getSymbol()->getDisplay(), postFix);
 }
 
-craft::lisp::LlvmBackend::LlvmBackend(instance<craft::lisp::Namespace> lisp)
+craft::lisp::LlvmBackend::LlvmBackend(instance<craft::lisp::Environment> env)
 	: context()
 	, _es()
-	, _tm(EngineBuilder().selectTarget()) // from current process
+	, _tm(EngineBuilder()
+		.setTargetOptions([]() -> TargetOptions {
+			TargetOptions ret;
+			ret.ExceptionModel = ExceptionHandling::WinEH;
+			return ret;
+		}())
+		.selectTarget()) // from current process
 	, _dl(_tm->createDataLayout())
 	, _objectLayer(_es,
 		[this](VModuleKey k) {
@@ -80,17 +86,17 @@ craft::lisp::LlvmBackend::LlvmBackend(instance<craft::lisp::Namespace> lisp)
 	, _compileLayer(_objectLayer, SimpleCompiler(*_tm))
 	, _optimizeLayer(_compileLayer, [this](std::unique_ptr<::llvm::Module> M) {return optimizeModule(std::move(M));})
 	, _compileCallbackManager(cantFail(orc::createLocalCompileCallbackManager(_tm->getTargetTriple(), _es, 0)))
-	, _cODLayer(_es, _optimizeLayer,
+	, _codLayer(_es, _optimizeLayer,
 		[&](orc::VModuleKey K) { return _resolvers[K]; },
 		[&](orc::VModuleKey K, std::shared_ptr<SymbolResolver> R) {_resolvers[K] = std::move(R);},
 		[](llvm::Function &F) { return std::set<llvm::Function*>({&F}); },
 		*_compileCallbackManager,
 		orc::createLocalIndirectStubsManagerBuilder(_tm->getTargetTriple())
 	)
-	, _ns(lisp)
+	, _env(env)
 {
-	lisp->getEnvironment()->log()->info("LLVM Target: {0}", (std::string)_tm->getTargetTriple().str());
-	lisp->getEnvironment()->log()->info("LLVM Target Features: {0}", (std::string)_tm->getTargetFeatureString());
+	env->log()->info("LLVM Target: {0}", (std::string)_tm->getTargetTriple().str());
+	env->log()->info("LLVM Target Features: {0}", (std::string)_tm->getTargetFeatureString());
 
 	_objectLayer.setProcessAllSections(true);
 
@@ -107,14 +113,34 @@ instance<craft::lisp::LlvmCompiler> craft::lisp::LlvmBackend::getCompiler() cons
 	return _compiler;
 }
 
-instance<craft::lisp::Namespace> craft::lisp::LlvmBackend::getNamespace() const
+instance<craft::lisp::Environment> craft::lisp::LlvmBackend::getEnvironment() const
 {
-	return _ns;
+	return _env;
 }
 
 craft::lisp::LlvmBackend::JitModule craft::lisp::LlvmBackend::addModule(std::unique_ptr<llvm::Module> module)
 {
 	auto K = _es.allocateVModule();
+	auto Filename = "output.o";
+	std::error_code EC;
+	raw_fd_ostream dest(Filename, EC, sys::fs::F_None);
+
+	if (EC) {
+		errs() << "Could not open file: " << EC.message();
+		return K;
+	}
+
+	legacy::PassManager pass;
+	auto FileType = TargetMachine::CGFT_ObjectFile;
+
+	if (_tm->addPassesToEmitFile(pass, dest, nullptr, FileType)) {
+		errs() << "TargetMachine can't emit a file of this type";
+		return K;
+	}
+
+	pass.run(*module);
+	dest.flush();
+
 	_resolvers[K] = createLegacyLookupResolver(
 		_es,
 		[this](const std::string &Name) -> JITSymbol {
@@ -134,7 +160,7 @@ craft::lisp::LlvmBackend::JitModule craft::lisp::LlvmBackend::addModule(std::uni
 		}
 	);
 
-    cantFail(_cODLayer.addModule(K, std::move(module)));
+    cantFail(_codLayer.addModule(K, std::move(module)));
     return K;
 }
 
@@ -180,7 +206,7 @@ JITSymbol craft::lisp::LlvmBackend::findSymbol(std::string const& name)
 	std::string mangled_name;
 	raw_string_ostream mangled_name_stream(mangled_name);
 	Mangler::getNameWithPrefix(mangled_name_stream, name, _dl);
-	return _cODLayer.findSymbol(mangled_name_stream.str(), false);
+	return _codLayer.findSymbol(mangled_name_stream.str(), false);
 }
 
 JITTargetAddress craft::lisp::LlvmBackend::getSymbolAddress(std::string const& name)
@@ -196,7 +222,7 @@ craft::lisp::LlvmBackendProvider::LlvmBackendProvider()
 	llvm::InitializeNativeTargetAsmParser();
 }
 
-instance<> craft::lisp::LlvmBackendProvider::init(instance<craft::lisp::Namespace> ns) const
+instance<> craft::lisp::LlvmBackendProvider::init(instance<craft::lisp::Environment> ns) const
 {
 	return instance<craft::lisp::LlvmBackend>::make(ns);
 }
@@ -251,7 +277,7 @@ instance<> LlvmBackendProvider::exec(instance<lisp::SFrame> frame, instance<> co
 
 	}
 	else
-		return frame->getNamespace()->environment()->eval(frame, code);
+		return frame->getEnvironment()->environment()->eval(frame, code);
 }
 */
 

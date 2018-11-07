@@ -101,7 +101,7 @@ instance<lisp::Module> LlvmSemanticsProvider::getModule(instance<> semantics) co
 
 instance<> LlvmSemanticsProvider::read(instance<lisp::Module> into, ReadOptions const* opts) const
 {
-	auto building = instance<LlvmModule>::make(into->getNamespace()->get<LlvmBackend>(), into);
+	auto building = instance<LlvmModule>::make(into->getEnvironment()->get<LlvmBackend>(), into);
 
 	return building;
 }

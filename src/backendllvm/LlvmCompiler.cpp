@@ -1,3 +1,5 @@
+#pragma warning( push )
+#pragma warning( disable : 4244)
 #include "backendllvm/common.h"
 
 #include "llvm_internal.h"
@@ -184,8 +186,7 @@ void LlvmCompileState::compile(instance<lisp::SCultSemanticNode> node)
 	}
 	catch (std::exception const& ex)
 	{
-		getCompiler()->getBackend()
-			->getNamespace()->getEnvironment()
+		getCompiler()->getBackend()->getEnvironment()
 			->log()->warn("Compiler does not support node `{1}`, default returned, exception: {0}", ex.what(), node);
 	}
 }
@@ -583,3 +584,5 @@ llvm::Value* LlvmAbiWindows::genCall(llvm::Value* callee, std::vector<llvm::Valu
 		return_value = call_value;
 	return return_value;
 }
+
+#pragma warning( pop ) 

@@ -54,13 +54,14 @@ LlvmBackend::JitModule LlvmSubroutine::specialize(std::vector<TypeId>* types)
 	verifyModule(*_module->getIr().get(), &verify_strm);
 	verify_strm.flush();
 	if (!verify_str.empty())
-		backend->getNamespace()->getEnvironment()->log()->info(verify_str);
+		backend->getEnvironment()->log()->info(verify_str);
 
 	auto ir = std::make_unique<llvm::Module>(_module->getModule()->uri(), backend->context);
 	ir->setDataLayout(backend->_dl);
 	ir->setTargetTriple(llvm::sys::getDefaultTargetTriple());
 
 	auto func = llvm::Function::Create(proto_func->getFunctionType(), llvm::Function::ExternalLinkage, name, ir.get());
+	func->setDLLStorageClass(llvm::Function::DLLExportStorageClass);
 
 	// TODO: specialize for ABI type??
 	llvm::ValueToValueMapTy vvmap;
@@ -80,7 +81,7 @@ LlvmBackend::JitModule LlvmSubroutine::specialize(std::vector<TypeId>* types)
 	//verifyModule(*ir.get(), &verify_strm);
 	//verify_strm.flush();
 	//if (!verify_str.empty())
-	//	backend->getNamespace()->getEnvironment()->log()->info(verify_str);
+	//	backend->getEnvironment()->log()->info(verify_str);
 
 	ir->print(llvm::errs(), nullptr);
 
@@ -101,7 +102,7 @@ instance<> LlvmSubroutine::invoke(GenericInvoke const& invk)
 
 	if (res == 0)
 	{
-		SPDLOG_TRACE(_module->getModule()->getNamespace()->getEnvironment()->log(),
+		SPDLOG_TRACE(_module->getModule()->getEnvironment()->log(),
 			"LlvmSubroutine::invoke: null getSymbolAddress");
 		return instance<>();
 	}

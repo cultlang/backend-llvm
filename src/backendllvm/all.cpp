@@ -1,3 +1,5 @@
+#pragma warning( push )
+#pragma warning( disable : 4244)
 #include "backendllvm/common.h"
 #include "all.h"
 
@@ -22,13 +24,13 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 	sem->builtin_implementMultiMethod("LlvmCompiler",
 		[]() -> instance<LlvmCompiler>
 	{
-		return Execution::getCurrent()->getNamespace()->get<LlvmBackend>()->getCompiler();
+		return Execution::getCurrent()->getEnvironment()->get<LlvmBackend>()->getCompiler();
 	});
 
 	sem->builtin_implementMultiMethod("llvm-ir",
 		[](instance<SCultSemanticNode> node)
 	{
-		auto res = Execution::getCurrent()->getNamespace()->get<LlvmBackend>()->require(node);
+		auto res = Execution::getCurrent()->getEnvironment()->get<LlvmBackend>()->require(node);
 
 		if (res.isType<LlvmSubroutine>())
 		{
@@ -40,7 +42,7 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 	sem->builtin_implementMultiMethod("llvm-call",
 		[](instance<SCultSemanticNode> node, VarArgs<instance<>> args)
 	{
-		auto res = Execution::getCurrent()->getNamespace()->get<LlvmBackend>()->require(node);
+		auto res = Execution::getCurrent()->getEnvironment()->get<LlvmBackend>()->require(node);
 
 		if (res.isType<LlvmSubroutine>())
 		{
@@ -61,7 +63,7 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 	sem->builtin_implementMultiMethod("compile",
 		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<Constant> ast)
 	{
-		SPDLOG_TRACE(c->currentModule->getNamespace()->getEnvironment()->log(),
+		SPDLOG_TRACE(c->currentModule->getEnvironment()->log(),
 			"compile/Constant");
 
 		auto value = ast->getValue();
@@ -71,7 +73,7 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 	sem->builtin_implementMultiMethod("compile",
 		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<Resolve> ast)
 	{
-		SPDLOG_TRACE(c->currentModule->getNamespace()->getEnvironment()->log(),
+		SPDLOG_TRACE(c->currentModule->getEnvironment()->log(),
 			"compile/Resolve");
 
 		auto binding = ast->getBinding();
@@ -103,7 +105,7 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 	sem->builtin_implementMultiMethod("compile",
 		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<Assign> ast)
 	{
-		SPDLOG_TRACE(c->currentModule->getNamespace()->getEnvironment()->log(),
+		SPDLOG_TRACE(c->currentModule->getEnvironment()->log(),
 			"compile/Assign");
 
 		c->compile(ast->slotAst());
@@ -120,7 +122,7 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 		c->setModule(ast->getSemantics()->getModule());
 		c->setFunction(ast);
 
-		SPDLOG_TRACE(c->currentModule->getNamespace()->getEnvironment()->log(),
+		SPDLOG_TRACE(c->currentModule->getEnvironment()->log(),
 			"compile/Function");
 
 		// TODO read through args, set names (do this with push scope and a specialization there)
@@ -138,7 +140,7 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 	sem->builtin_implementMultiMethod("compile",
 		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<Block> ast)
 	{
-		SPDLOG_TRACE(c->currentModule->getNamespace()->getEnvironment()->log(),
+		SPDLOG_TRACE(c->currentModule->getEnvironment()->log(),
 			"compile/Block");
 
 		c->pushScope(ast);
@@ -153,7 +155,7 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 	sem->builtin_implementMultiMethod("compile",
 		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<Variable> ast)
 	{
-		SPDLOG_TRACE(c->currentModule->getNamespace()->getEnvironment()->log(),
+		SPDLOG_TRACE(c->currentModule->getEnvironment()->log(),
 			"compile/Variable");
 		
 		auto storeLoc = c->getScopeValue(ast->getBinding());
@@ -175,7 +177,7 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 	sem->builtin_implementMultiMethod("compile",
 		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<BindSite> ast)
 	{
-		SPDLOG_TRACE(c->currentModule->getNamespace()->getEnvironment()->log(),
+		SPDLOG_TRACE(c->currentModule->getEnvironment()->log(),
 			"compile/BindSite");
 
 		// TODO elide scope lookup (and scope array size) for constants
@@ -196,7 +198,7 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 	sem->builtin_implementMultiMethod("compile",
 		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<CallSite> ast)
 	{
-		SPDLOG_TRACE(c->currentModule->getNamespace()->getEnvironment()->log(),
+		SPDLOG_TRACE(c->currentModule->getEnvironment()->log(),
 			"compile/CallSite");
 
 		auto count = ast->argCount();
@@ -220,7 +222,7 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 		else if(c->lastReturnedInstance.isType<lisp::Function>())
 		{
 			auto bindfn = c->lastReturnedInstance.asType<lisp::Function>();
-			auto res = Execution::getCurrent()->getNamespace()->get<LlvmBackend>()->require(bindfn);
+			auto res = c->getCompiler()->getBackend()->require(bindfn);
 
 			if (res.isType<LlvmSubroutine>())
 			{
@@ -255,7 +257,7 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 	sem->builtin_implementMultiMethod("compile",
 		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<Condition> ast)
 	{
-		SPDLOG_TRACE(c->currentModule->getNamespace()->getEnvironment()->log(),
+		SPDLOG_TRACE(c->currentModule->getEnvironment()->log(),
 			"compile/Condition");
 
 		// The count of all branches in the final PHI node, we add one for the default else branch
@@ -328,7 +330,7 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 	sem->builtin_implementMultiMethod("compile",
 		[](instance<LlvmCompileState> c, instance<LlvmAbiBase> abi, instance<Loop> ast)
 	{
-		SPDLOG_TRACE(c->currentModule->getNamespace()->getEnvironment()->log(),
+		SPDLOG_TRACE(c->currentModule->getEnvironment()->log(),
 			"compile/Loop");
 
 
@@ -363,11 +365,12 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 		
 	});
 
-	module->getNamespace()->refreshBackends();
-	module->getNamespace()->get<LlvmBackend>()->getCompiler()->builtin_validateSpecialForms(module);
+	module->getEnvironment()->refreshBackends();
+	module->getEnvironment()->get<LlvmBackend>()->getCompiler()->builtin_validateSpecialForms(module);
 }
 
 BuiltinModuleDescription cultlang::backendllvm::BuiltinLlvm("cult/llvm", cultlang::backendllvm::make_llvm_bindings);
 
+#pragma warning( pop ) 
 
 #include "types/dll_entry.inc"

@@ -35,8 +35,8 @@ int main(int argc, char** argv)
 		{
 			_argv.push_back(instance<std::string>::make(argv[i]));
 		}
-		instance<Environment> global_env = instance<Environment>::make(spdlog::stdout_color_mt("environment"), _argv);
-		instance<Namespace> ns = global_env->ns_user;
+		instance<Environment> env = instance<Environment>::make(spdlog::stdout_color_mt("environment"), _argv);
+
 		std::string f;
 		try
 		{
@@ -44,7 +44,7 @@ int main(int argc, char** argv)
 		}
 		catch (...)
 		{
-			global_env->log()->info("No Such File: {0}", argv[1]);
+			env->log()->info("No Such File: {0}", argv[1]);
 		}
 		try
 		{
@@ -53,7 +53,7 @@ int main(int argc, char** argv)
 		}
 		catch (std::exception const& e)
 		{
-			global_env->log()->error(e.what());
+			env->log()->error(e.what());
 			return -1;
 		}
 	}

@@ -49,9 +49,9 @@ namespace lisp
 		using OptimizeFunction = std::function<std::unique_ptr<llvm::Module>(std::unique_ptr<llvm::Module>)>;
 		llvm::orc::IRTransformLayer<decltype(_compileLayer), OptimizeFunction> _optimizeLayer;
 		std::unique_ptr<llvm::orc::JITCompileCallbackManager> _compileCallbackManager;
-  		llvm::orc::CompileOnDemandLayer<decltype(_optimizeLayer)> _cODLayer;
+  		llvm::orc::CompileOnDemandLayer<decltype(_optimizeLayer)> _codLayer;
 
-		instance<Namespace> _ns;
+		instance<Environment> _env;
 		instance<LlvmCompiler> _compiler;
 
 		struct _ModuleEntry
@@ -86,11 +86,11 @@ namespace lisp
 
 	public:
 
-		CULTLANG_BACKENDLLVM_EXPORTED LlvmBackend(instance<Namespace>);
+		CULTLANG_BACKENDLLVM_EXPORTED LlvmBackend(instance<Environment>);
 		CULTLANG_BACKENDLLVM_EXPORTED void craft_setupInstance();
 
 		CULTLANG_BACKENDLLVM_EXPORTED instance<LlvmCompiler> getCompiler() const;
-		CULTLANG_BACKENDLLVM_EXPORTED instance<Namespace> getNamespace() const;
+		CULTLANG_BACKENDLLVM_EXPORTED instance<Environment> getEnvironment() const;
 
 	public:
 		CULTLANG_BACKENDLLVM_EXPORTED LlvmBackend::JitModule addModule(std::unique_ptr<llvm::Module> module);
@@ -115,7 +115,7 @@ namespace lisp
 		CULTLANG_BACKENDLLVM_EXPORTED LlvmBackendProvider();
 
 	public:
-		virtual instance<> init(instance<Namespace> env) const override;
+		virtual instance<> init(instance<Environment> env) const override;
 
 	public:
 		virtual instance<> makeCompilerOptions() const override;
