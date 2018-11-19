@@ -1,5 +1,5 @@
 #pragma once 
-
+#ifdef _WIN32
 #include "llvm_internal.h"
 #define CLANG_INTERPRETER_WIN_EXCEPTIONS
 namespace interpreter {
@@ -40,3 +40,4 @@ private:
 };
 
 }
+#endif

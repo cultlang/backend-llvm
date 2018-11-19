@@ -5,6 +5,11 @@
 namespace craft {
 namespace lisp
 {
+	// Forward Declarations
+	class LlvmCompiler;
+	class LlvmCompileState;
+	class LlvmAbiBase;
+	class LlvmAbiWindows;
 	/******************************************************************************
 	** SLlvmAbi
 	******************************************************************************/

@@ -14,6 +14,8 @@
 #endif
 
 // Depreciated in C++ 17, llvm uses them
+// 11/15/2018 These are still in stdlibc++ as of gcc8. Ifguarding this until I check if they are missing in libc++ on mac os
+#ifdef _WIN32
 namespace std
 {
 	template <class Arg, class Result>
@@ -67,6 +69,7 @@ namespace std
 		return pointer_to_binary_function<Arg1, Arg2, Result>(f);
 	}
 }
+#endif
 
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/ADT/STLExtras.h"

@@ -128,7 +128,7 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 		// TODO read through args, set names (do this with push scope and a specialization there)
 		c->pushScope(ast);
 		auto count = ast->argCount();
-		for(auto i = 0; i < count; i++)
+		for(size_t i =0; i < count; i++)
 		{
 			c->compile(ast->argAst(i));
 		}
@@ -146,7 +146,7 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 		c->pushScope(ast);
 
 		auto count = ast->statementCount();
-		for (auto i = 0; i < count; i++)
+		for (size_t i =0; i < count; i++)
 		{
 			c->compile(ast->statementAst(i));
 		}
@@ -207,7 +207,7 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 		//TODO Windows ABI
 		args.reserve(count + 1);
 
-		for (auto i = 0; i < count; ++i)
+		for (size_t i =0; i < count; ++i)
 		{
 			c->compile(ast->argAst(i));
 			args.push_back(c->lastReturnedValue);
@@ -320,7 +320,7 @@ void cultlang::backendllvm::make_llvm_bindings(instance<Module> module)
 
 		c->irBuilder->SetInsertPoint(end_block);
 		auto phi = c->irBuilder->CreatePHI(c->getLlvmInstanceType(types::None), count);
-		for (auto i = 0; i < count; ++i)
+		for (size_t i =0; i < count; ++i)
 		{
 			phi->addIncoming(br_values[i], br_blocks[i]);
 		}

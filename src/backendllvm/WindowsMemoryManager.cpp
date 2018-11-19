@@ -1,5 +1,6 @@
 
 
+#ifdef _WIN32
 //==-- examples/clang-interpreter/Manager.cpp - Clang C Interpreter Example -=//
 //
 //                     The LLVM Compiler Infrastructure
@@ -325,3 +326,5 @@ SEHFrameHandler::RaiseSEHException(void *CxxExcept, void *Info) {
 #endif // CLANG_INTERPRETER_WIN_EXCEPTIONS
 
 } // namespace interpreter
+
+#endif

@@ -49,7 +49,7 @@ void LlvmModule::generate()
 
 	auto semantics = _module->require<CultSemantics>();
 	auto stmt_count = semantics->countStatements();
-	for (auto i = 0; i < stmt_count; ++i)
+	for (size_t i =0; i < stmt_count; ++i)
 	{
 		auto stmt = semantics->getStatement(i);
 

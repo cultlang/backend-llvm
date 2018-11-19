@@ -232,7 +232,7 @@ void LlvmCompileState::pushScope(instance<lisp::SScope> scope)
 			llvm::ConstantInt::get(llvm::Type::getInt64Ty(*context), scope->getSlotCount())
 		);
 		auto count = scope->getSlotCount();
-		for(auto i = 0; i < count; i++)
+		for(size_t i =0; i < count; i++)
 		{
 			auto bind = scope->lookupSlot(i);
 			scopeStack.back().values[bind] = irBuilder->CreateGEP(lastReturnedValue, {
@@ -247,7 +247,7 @@ void LlvmCompileState::pushScope(instance<lisp::SScope> scope)
 		auto fn = scope.asType<lisp::Function>();
 
 		auto count = fn->argCount();
-		for (auto i = 0; i < count; i++)
+		for (size_t i =0; i < count; i++)
 		{
 			auto bind = scope->lookupSlot(i);
 			auto arg = codeFunction->arg_begin() + _abi->transmuteArgumentIndex(i);
@@ -316,7 +316,8 @@ llvm::Constant* LlvmCompileState::genAsConstant(instance<> inst)
 llvm::Value* LlvmCompileState::genInstanceCast(llvm::Value* value, TypeId type)
 {
 	LlvmCompiler::_TypeCacheEntry* entry = nullptr;
-	if (type != types::None) entry = &_compiler->_getTypeCache(type);
+	auto tmp = _compiler->_getTypeCache(type);
+	if (type != types::None) entry = &tmp;
 
 	auto const targetPtrType = (entry == nullptr) ? _compiler->type_anyPtr : llvm::PointerType::get(entry->opaque_struct, 0);
 
@@ -382,7 +383,7 @@ void LlvmCompileState::genSpillInstances(std::vector<llvm::Value*> const& spill)
 		llvm::ConstantInt::get(*context, llvm::APInt(64, spill.size()))
 	);
 
-	for (auto i = 0; i < spill.size(); ++i)
+	for (size_t i =0; i < spill.size(); ++i)
 	{
 		auto dest = irBuilder->CreateGEP(lastReturnedValue, {
 				llvm::ConstantInt::get(*context, llvm::APInt(32, i))
@@ -562,7 +563,7 @@ llvm::Value* LlvmAbiWindows::genCall(llvm::Value* callee, std::vector<llvm::Valu
 		mod_args.push_back(return_value);
 	}
 
-	for (auto i = 0; i < args.size(); ++i)
+	for (size_t i =0; i < args.size(); ++i)
 	{
 		auto arg = args[i];
 

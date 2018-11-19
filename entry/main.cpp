@@ -31,7 +31,7 @@ int main(int argc, char** argv)
 	if (argc != 1)
 	{
 		std::vector<instance<std::string>> _argv;
-		for (auto i = 0; i < argc; i++)
+		for (int i = 0; i < argc; i++)
 		{
 			_argv.push_back(instance<std::string>::make(argv[i]));
 		}
