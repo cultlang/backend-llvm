@@ -3,7 +3,6 @@ load("//build_tools:expand_llvm.bzl", "expand_llvm")
 
 header_generator(  
   deps = [
-    "//util", 
     "//types:headers", 
     "//lisp:headers"
   ] + select({
